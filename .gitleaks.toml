@@ -1,0 +1,19 @@
+[allowlist]
+description = "Global allowlist"
+paths = [
+  ".env.example",
+  "docs/**",
+  "ADR/**",
+  "**/*.md"
+]
+
+[extend]
+useDefault = true
+
+title = "SentinelArena Gitleaks Configuration"
+
+[[rules]]
+id = "sentinel-env-check"
+description = "Detect .env files with actual secrets"
+regex = '''(?i)(api[_-]?key|secret|password|token)\s*=\s*['\"]?[a-zA-Z0-9_\-]{20,}['\"]?'''
+path = '''\.env$'''

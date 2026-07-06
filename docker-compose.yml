@@ -1,0 +1,125 @@
+version: "3.9"
+
+services:
+  # ============================================================
+  # Infrastructure
+  # ============================================================
+  postgres:
+    image: pgvector/pgvector:pg16
+    environment:
+      POSTGRES_USER: ${POSTGRES_USER:-sentinel}
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:-sentinel_dev}
+      POSTGRES_DB: ${POSTGRES_DB:-sentinel_arena}
+    ports:
+      - "5432:5432"
+    volumes:
+      - postgres_data:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U sentinel"]
+      interval: 5s
+      timeout: 5s
+      retries: 5
+
+  redis:
+    image: redis:7-alpine
+    ports:
+      - "6379:6379"
+    volumes:
+      - redis_data:/data
+    healthcheck:
+      test: ["CMD", "redis-cli", "ping"]
+      interval: 5s
+      timeout: 5s
+      retries: 5
+
+  # ============================================================
+  # Backend Services (Python)
+  # ============================================================
+  api-gateway:
+    build:
+      context: ./services/api-gateway
+      dockerfile: Dockerfile
+    ports:
+      - "${API_GATEWAY_PORT:-8000}:8000"
+    environment:
+      - DATABASE_URL=postgresql+asyncpg://${POSTGRES_USER:-sentinel}:${POSTGRES_PASSWORD:-sentinel_dev}@postgres:5432/${POSTGRES_DB:-sentinel_arena}
+      - REDIS_URL=redis://redis:6379/0
+      - JWT_SECRET_KEY=${JWT_SECRET_KEY:-dev_secret_change_in_production}
+      - JWT_ALGORITHM=${JWT_ALGORITHM:-HS256}
+      - JWT_ACCESS_TOKEN_EXPIRE_MINUTES=${JWT_ACCESS_TOKEN_EXPIRE_MINUTES:-15}
+      - JWT_REFRESH_TOKEN_EXPIRE_DAYS=${JWT_REFRESH_TOKEN_EXPIRE_DAYS:-7}
+      - ALLOWED_ORIGINS=${ALLOWED_ORIGINS:-http://localhost:3000,http://localhost:3001,http://localhost:3002}
+      - LOG_LEVEL=${LOG_LEVEL:-info}
+      - ANTHROPIC_API_KEY=${ANTHROPIC_API_KEY:-}
+      - ANTHROPIC_FAST_MODEL=${ANTHROPIC_FAST_MODEL:-claude-sonnet-4-20250514}
+      - ANTHROPIC_REASONING_MODEL=${ANTHROPIC_REASONING_MODEL:-claude-sonnet-4-20250514}
+    depends_on:
+      postgres:
+        condition: service_healthy
+      redis:
+        condition: service_healthy
+    volumes:
+      - ./services/api-gateway:/app
+    command: uvicorn app.main:app --host 0.0.0.0 --port 8000 --reload
+
+  crowd-simulator:
+    build:
+      context: ./services/crowd-simulator
+      dockerfile: Dockerfile
+    ports:
+      - "${CROWD_SIMULATOR_PORT:-8001}:8001"
+    environment:
+      - REDIS_URL=redis://redis:6379/0
+      - SIMULATOR_INTERVAL_MS=${SIMULATOR_INTERVAL_MS:-5000}
+      - SIMULATOR_NUM_ZONES=${SIMULATOR_NUM_ZONES:-12}
+      - SIMULATOR_MAX_CAPACITY_PER_ZONE=${SIMULATOR_MAX_CAPACITY_PER_ZONE:-500}
+      - LOG_LEVEL=${LOG_LEVEL:-info}
+    depends_on:
+      redis:
+        condition: service_healthy
+    volumes:
+      - ./services/crowd-simulator:/app
+    command: uvicorn app.main:app --host 0.0.0.0 --port 8001 --reload
+
+  # ============================================================
+  # Frontend Applications
+  # ============================================================
+  web-dashboard:
+    build:
+      context: .
+      dockerfile: apps/web-dashboard/Dockerfile
+    ports:
+      - "${WEB_DASHBOARD_PORT:-3000}:3000"
+    environment:
+      - NEXT_PUBLIC_API_URL=http://localhost:${API_GATEWAY_PORT:-8000}
+      - NEXT_PUBLIC_WS_URL=ws://localhost:${API_GATEWAY_PORT:-8000}
+    depends_on:
+      - api-gateway
+
+  fan-pwa:
+    build:
+      context: .
+      dockerfile: apps/fan-pwa/Dockerfile
+    ports:
+      - "${FAN_PWA_PORT:-3001}:3000"
+    environment:
+      - NEXT_PUBLIC_API_URL=http://localhost:${API_GATEWAY_PORT:-8000}
+      - NEXT_PUBLIC_WS_URL=ws://localhost:${API_GATEWAY_PORT:-8000}
+    depends_on:
+      - api-gateway
+
+  volunteer-app:
+    build:
+      context: .
+      dockerfile: apps/volunteer-app/Dockerfile
+    ports:
+      - "${VOLUNTEER_APP_PORT:-3002}:3002"
+    environment:
+      - VITE_API_URL=http://localhost:${API_GATEWAY_PORT:-8000}
+      - VITE_WS_URL=ws://localhost:${API_GATEWAY_PORT:-8000}
+    depends_on:
+      - api-gateway
+
+volumes:
+  postgres_data:
+  redis_data:
