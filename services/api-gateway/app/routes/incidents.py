@@ -1,7 +1,7 @@
 """SentinelArena — Incident Reporting Routes.
 
 Endpoints for creating, listing, and managing incident reports
-filed by volunteers and staff.
+filed by volunteers and staff, persisted in MongoDB Atlas.
 """
 
 from __future__ import annotations
@@ -17,7 +17,7 @@ from pydantic import BaseModel, Field
 logger = structlog.get_logger()
 router = APIRouter()
 
-# In-memory incident store (production would use database)
+# In-memory incident store (fallback when MongoDB is offline)
 _incidents: dict[str, dict[str, Any]] = {}
 
 
@@ -92,6 +92,18 @@ async def create_incident(
 
     _incidents[incident_id] = incident
 
+    # Persist to MongoDB Atlas if available
+    if getattr(request.app.state, "db_available", False):
+        try:
+            from app.config import get_settings
+            from app.database import get_client
+
+            client = get_client()
+            db = client[get_settings().mongodb_db_name]
+            await db.incidents.insert_one(incident)
+        except Exception as exc:
+            logger.warning("Failed to save incident to MongoDB", error=str(exc))
+
     logger.info(
         "Incident created",
         incident_id=incident_id,
@@ -114,26 +126,62 @@ async def create_incident(
 
 @router.get("")
 async def list_incidents(
+    request: Request,
     status: str | None = None,
     severity: str | None = None,
 ) -> Any:
     """List all incidents, optionally filtered by status or severity."""
-    incidents = list(_incidents.values())
+    if getattr(request.app.state, "db_available", False):
+        try:
+            from app.config import get_settings
+            from app.database import get_client
+
+            client = get_client()
+            db = client[get_settings().mongodb_db_name]
+            query: dict[str, Any] = {}
+            if status:
+                query["status"] = status
+            if severity:
+                query["severity"] = severity
+            cursor = db.incidents.find(query, {"_id": 0}).sort("created_at", -1).limit(100)
+            incidents = [doc async for doc in cursor]
+            return {
+                "incidents": incidents,
+                "total": len(incidents),
+            }
+        except Exception as exc:
+            logger.warning("Failed to fetch incidents from MongoDB", error=str(exc))
+
+    incidents_list = list(_incidents.values())
 
     if status:
-        incidents = [i for i in incidents if i["status"] == status]
+        incidents_list = [i for i in incidents_list if i["status"] == status]
     if severity:
-        incidents = [i for i in incidents if i["severity"] == severity]
+        incidents_list = [i for i in incidents_list if i["severity"] == severity]
 
     return {
-        "incidents": incidents,
-        "total": len(incidents),
+        "incidents": incidents_list,
+        "total": len(incidents_list),
     }
 
 
 @router.get("/{incident_id}")
-async def get_incident(incident_id: str) -> Any:
+async def get_incident(incident_id: str, request: Request) -> Any:
     """Get a specific incident by ID."""
+    if getattr(request.app.state, "db_available", False):
+        try:
+            from app.config import get_settings
+            from app.database import get_client
+
+            client = get_client()
+            db = client[get_settings().mongodb_db_name]
+            doc = await db.incidents.find_one({"id": incident_id}, {"_id": 0})
+            if doc:
+                return doc
+        except Exception as exc:
+            logger.warning("Failed to fetch incident from MongoDB", error=str(exc))
+
     if incident_id not in _incidents:
         return {"error": "Incident not found"}
     return _incidents[incident_id]
+

@@ -1,6 +1,6 @@
 # SentinelArena — Accessibility Statement
 
-> **Standard:** WCAG 2.2 Level AA | **Last Audited:** 2025-01-15
+> **Standard:** WCAG 2.2 Level AA | **Last Audited:** 2026-07-06
 
 ## Commitment
 

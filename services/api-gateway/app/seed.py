@@ -175,7 +175,7 @@ def create_density_evaluator() -> DensityEvaluator:
 def get_sop_documents() -> list[dict[str, str]]:
     """Return seed SOP documents for RAG retrieval.
 
-    In production, these would be loaded from the database with pgvector embeddings.
+    In production, these would be loaded from MongoDB Atlas with $vectorSearch embeddings.
     For the MVP, we provide 12 realistic SOP document chunks.
     """
     return [
@@ -358,3 +358,164 @@ def get_sop_documents() -> list[dict[str, str]]:
             ),
         },
     ]
+
+
+async def seed_mongodb(db: Any) -> None:
+    """Automatically seed MongoDB Atlas with demo users, venue layout, and SOP documents.
+
+    Only inserts if the respective collections are empty, preventing duplicate data.
+    Provides instant out-of-the-box readiness for testing and demonstration.
+    """
+    import logging
+    from datetime import datetime, timezone
+    from uuid import uuid4
+
+    from app.core.auth import hash_password
+
+    logger = logging.getLogger(__name__)
+
+    try:
+        # 1. Seed Demo Users
+        if await db.users.count_documents({}) == 0:
+            now = datetime.now(timezone.utc)
+            demo_users = [
+                {
+                    "id": "user-admin-demo",
+                    "email": "admin@sentinelarena.com",
+                    "hashed_password": hash_password("SentinelAdmin2026!"),
+                    "display_name": "Demo Administrator",
+                    "role": "admin",
+                    "locale": "en",
+                    "is_active": True,
+                    "created_at": now,
+                    "updated_at": now,
+                },
+                {
+                    "id": "user-organizer-demo",
+                    "email": "organizer@sentinelarena.com",
+                    "hashed_password": hash_password("SentinelOrg2026!"),
+                    "display_name": "Lead Organizer",
+                    "role": "organizer",
+                    "locale": "en",
+                    "is_active": True,
+                    "created_at": now,
+                    "updated_at": now,
+                },
+                {
+                    "id": "user-volunteer-demo",
+                    "email": "volunteer@sentinelarena.com",
+                    "hashed_password": hash_password("SentinelVol2026!"),
+                    "display_name": "Field Volunteer",
+                    "role": "volunteer",
+                    "locale": "es",
+                    "is_active": True,
+                    "created_at": now,
+                    "updated_at": now,
+                },
+                {
+                    "id": "user-fan-demo",
+                    "email": "fan@sentinelarena.com",
+                    "hashed_password": hash_password("SentinelFan2026!"),
+                    "display_name": "Stadium Fan",
+                    "role": "fan",
+                    "locale": "en",
+                    "is_active": True,
+                    "created_at": now,
+                    "updated_at": now,
+                },
+            ]
+            await db.users.insert_many(demo_users)
+            logger.info("Seeded 4 demo users into MongoDB Atlas")
+
+        # 2. Seed Venue
+        if await db.venues.count_documents({}) == 0:
+            venue_doc = {
+                "id": "venue-demo",
+                "name": "SentinelArena Stadium",
+                "description": "Smart Stadium & Tournament Operations Platform Demo Environment",
+                "total_capacity": 10000,
+                "address": "100 Stadium Way, Tech City",
+                "created_at": datetime.now(timezone.utc),
+            }
+            await db.venues.insert_one(venue_doc)
+            logger.info("Seeded demo venue into MongoDB Atlas")
+
+        # 3. Seed Zones
+        if await db.zones.count_documents({}) == 0:
+            zones_data = [
+                {"id": "zone-a", "venue_id": "venue-demo", "code": "A", "name": "Zone A — Main Lobby", "capacity": 1000, "floor_level": 0},
+                {"id": "zone-b", "venue_id": "venue-demo", "code": "B", "name": "Zone B — North Concourse", "capacity": 800, "floor_level": 0},
+                {"id": "zone-c", "venue_id": "venue-demo", "code": "C", "name": "Zone C — North Stand", "capacity": 2000, "floor_level": 1},
+                {"id": "zone-d", "venue_id": "venue-demo", "code": "D", "name": "Zone D — South Concourse", "capacity": 800, "floor_level": 0},
+                {"id": "zone-e", "venue_id": "venue-demo", "code": "E", "name": "Zone E — South Stand", "capacity": 2000, "floor_level": 1},
+                {"id": "zone-f", "venue_id": "venue-demo", "code": "F", "name": "Zone F — East Wing", "capacity": 600, "floor_level": 0},
+                {"id": "zone-g", "venue_id": "venue-demo", "code": "G", "name": "Zone G — North Gates", "capacity": 500, "floor_level": 0},
+                {"id": "zone-h", "venue_id": "venue-demo", "code": "H", "name": "Zone H — South Gates", "capacity": 500, "floor_level": 0},
+                {"id": "zone-i", "venue_id": "venue-demo", "code": "I", "name": "Zone I — VIP Area", "capacity": 300, "floor_level": 0},
+                {"id": "zone-j", "venue_id": "venue-demo", "code": "J", "name": "Zone J — Level 1 Concourse", "capacity": 800, "floor_level": 1},
+                {"id": "zone-k", "venue_id": "venue-demo", "code": "K", "name": "Zone K — Level 2 Concourse", "capacity": 500, "floor_level": 2},
+                {"id": "zone-l", "venue_id": "venue-demo", "code": "L", "name": "Zone L — Press & VIP Level 2", "capacity": 200, "floor_level": 2},
+            ]
+            await db.zones.insert_many(zones_data)
+            logger.info("Seeded 12 stadium zones into MongoDB Atlas")
+
+        # 4. Seed SOP Documents (RAG Knowledge Base)
+        if await db.sop_documents.count_documents({}) == 0:
+            sop_docs = [
+                {
+                    "id": str(uuid4()),
+                    "venue_id": "venue-demo",
+                    "title": doc["title"],
+                    "section": doc["section"],
+                    "content": doc["content"],
+                    "created_at": datetime.now(timezone.utc),
+                }
+                for doc in get_sop_documents()
+            ]
+            await db.sop_documents.insert_many(sop_docs)
+            logger.info("Seeded %d SOP documents into MongoDB Atlas", len(sop_docs))
+
+        # 5. Seed POIs & Edges (Navigation Graph)
+        if await db.pois.count_documents({}) == 0:
+            graph = create_venue_graph()
+            pois = [
+                {
+                    "id": node.id,
+                    "venue_id": "venue-demo",
+                    "zone_id": node.zone_id,
+                    "name": node.name,
+                    "poi_type": node.poi_type,
+                    "floor_level": node.floor_level,
+                    "x_coord": node.x,
+                    "y_coord": node.y,
+                    "is_accessible": node.is_accessible,
+                }
+                for node in graph.get_all_nodes()
+            ]
+            if pois:
+                await db.pois.insert_many(pois)
+                logger.info("Seeded %d POIs into MongoDB Atlas", len(pois))
+
+        if await db.edges.count_documents({}) == 0:
+            graph = create_venue_graph()
+            edges = [
+                {
+                    "id": str(uuid4()),
+                    "venue_id": "venue-demo",
+                    "from_poi_id": edge.from_node_id,
+                    "to_poi_id": edge.to_node_id,
+                    "distance_meters": edge.distance_meters,
+                    "accessibility": edge.accessibility.value,
+                    "is_bidirectional": edge.is_bidirectional,
+                    "congestion_weight": edge.congestion_weight,
+                }
+                for edge in graph.get_all_edges()
+            ]
+            if edges:
+                await db.edges.insert_many(edges)
+                logger.info("Seeded %d navigation edges into MongoDB Atlas", len(edges))
+
+    except Exception as exc:
+        logger.warning("Error seeding MongoDB Atlas: %s", exc)
+
+

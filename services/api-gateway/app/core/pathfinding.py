@@ -218,6 +218,10 @@ class VenueGraph:
         """Get all nodes in the graph."""
         return list(self._nodes.values())
 
+    def get_all_edges(self) -> list[GraphEdge]:
+        """Get all edges in the graph."""
+        return [edge for edges in self._adjacency.values() for edge in edges]
+
     @property
     def node_count(self) -> int:
         """Number of nodes in the graph."""

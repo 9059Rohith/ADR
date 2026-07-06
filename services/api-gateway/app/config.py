@@ -26,10 +26,9 @@ class Settings(BaseSettings):
         extra="ignore",
     )
 
-    # --- Database ---
-    database_url: str = (
-        "postgresql+asyncpg://sentinel:sentinel_dev@localhost:5432/sentinel_arena"
-    )
+    # --- Database (MongoDB Atlas) ---
+    mongodb_uri: str = "mongodb://localhost:27017"
+    mongodb_db_name: str = "sentinel_arena"
 
     # --- Redis ---
     redis_url: str = "redis://localhost:6379/0"
@@ -40,10 +39,10 @@ class Settings(BaseSettings):
     jwt_access_token_expire_minutes: int = 15
     jwt_refresh_token_expire_days: int = 7
 
-    # --- Anthropic ---
-    anthropic_api_key: str = ""
-    anthropic_fast_model: str = "claude-sonnet-4-20250514"
-    anthropic_reasoning_model: str = "claude-sonnet-4-20250514"
+    # --- Groq (LLM Provider) ---
+    groq_api_key: str = ""
+    groq_fast_model: str = "llama-3.1-8b-instant"
+    groq_reasoning_model: str = "llama-3.3-70b-versatile"
 
     # --- Weather ---
     weather_api_key: str = ""
@@ -72,7 +71,7 @@ class Settings(BaseSettings):
     @property
     def use_real_llm(self) -> bool:
         """Check if a real LLM API key is configured."""
-        return bool(self.anthropic_api_key)
+        return bool(self.groq_api_key)
 
     @property
     def use_real_weather(self) -> bool:

@@ -1,7 +1,7 @@
 """SentinelArena — LLM Provider Port (Interface).
 
 Abstract interface for LLM providers. Implementations include:
-- AnthropicLLMAdapter: Real Claude API calls
+- GroqLLMAdapter: Real Groq Llama API calls (LPU inference)
 - MockLLMAdapter: Deterministic responses for dev/testing
 
 See ADR-004 for the adapter pattern rationale.
@@ -38,7 +38,7 @@ class LLMProvider(ABC):
 
     All LLM interactions go through this interface, enabling:
     - Mock adapter for testing (no API costs, deterministic)
-    - Real adapter for production (Anthropic Claude)
+    - Real adapter for production (Groq LPU Llama 3.3/3.1)
     - Future swappability (OpenAI, Google, etc.)
     """
 

@@ -23,7 +23,12 @@ from fastapi.middleware.cors import CORSMiddleware
 from app.config import get_settings
 from app.database import close_db, init_db
 from app.routes import auth, chat, crowd, decisions, incidents, navigation, venues
-from app.seed import create_venue_graph, create_density_evaluator, get_sop_documents
+from app.seed import (
+    create_density_evaluator,
+    create_venue_graph,
+    get_sop_documents,
+    seed_mongodb,
+)
 from app.agents.orchestrator import AgentOrchestrator
 
 
@@ -65,26 +70,34 @@ def _configure_logging() -> None:
 _configure_logging()
 logger = structlog.get_logger()
 
+# In-memory sliding window rate limiter store
+_rate_limit_store: dict[str, list[float]] = {}
+
 
 @asynccontextmanager
 async def lifespan(app: FastAPI) -> AsyncGenerator[None, None]:
     """Application lifecycle manager.
 
-    Startup: Initialize database, venue graph, agent orchestrator.
+    Startup: Initialize database, seed MongoDB Atlas, load venue graph, agent orchestrator.
     Shutdown: Close database connections.
     """
     settings = get_settings()
     logger.info("Starting SentinelArena API Gateway", port=settings.api_gateway_port)
 
-    # Initialize database (graceful — allows running without Postgres)
+    # Initialize database (graceful — allows running without MongoDB)
     db_available = False
     try:
         await init_db()
+        from app.database import get_client
+
+        client = get_client()
+        db = client[settings.mongodb_db_name]
+        await seed_mongodb(db)
         db_available = True
-        logger.info("Database initialized successfully")
+        logger.info("MongoDB Atlas initialized and seeded successfully")
     except Exception as exc:
         logger.warning(
-            "Database not available — running in demo mode",
+            "MongoDB Atlas not available — running in demo mode",
             error=str(exc),
         )
 
@@ -154,6 +167,40 @@ def create_app() -> FastAPI:
         allow_headers=["*"],
         expose_headers=["X-Request-ID"],
     )
+
+    # ── Rate Limiting Middleware (Top 1% Efficiency & Security) ──
+    @app.middleware("http")
+    async def rate_limiting_middleware(request: Request, call_next: Any) -> Response:
+        """Enforce sliding-window rate limiting per IP address."""
+        if request.url.path in ["/health", "/api/v1/info", "/api/docs", "/api/openapi.json"]:
+            return await call_next(request)
+
+        client_ip = request.client.host if request.client else "127.0.0.1"
+        now = time.time()
+        window = 60.0  # 1 minute window
+
+        timestamps = _rate_limit_store.get(client_ip, [])
+        timestamps = [t for t in timestamps if now - t < window]
+
+        limit = (
+            settings.rate_limit_llm_requests_per_minute
+            if "/chat" in request.url.path or "/decisions" in request.url.path
+            else settings.rate_limit_requests_per_minute
+        )
+
+        if len(timestamps) >= limit:
+            from fastapi.responses import JSONResponse
+
+            return JSONResponse(
+                status_code=429,
+                content={"detail": "Too Many Requests. Rate limit exceeded."},
+                headers={"Retry-After": "60"},
+            )
+
+        timestamps.append(now)
+        _rate_limit_store[client_ip] = timestamps
+
+        return await call_next(request)
 
     # ── Security Headers Middleware ──
     @app.middleware("http")

@@ -1,7 +1,7 @@
 """SentinelArena — Decision Support Routes.
 
 Endpoints for AI-generated recommendations with human-in-the-loop
-approval, rejection, and audit logging.
+approval, rejection, and audit logging persisted to MongoDB Atlas.
 """
 
 from __future__ import annotations
@@ -19,7 +19,7 @@ from app.models import AuditLog, DecisionStatus
 logger = structlog.get_logger()
 router = APIRouter()
 
-# In-memory decision store (production would use database)
+# In-memory decision store (fallback when MongoDB is offline)
 _pending_decisions: dict[str, dict[str, Any]] = {}
 
 
@@ -82,6 +82,18 @@ async def request_decision(
 
     _pending_decisions[decision_id] = decision
 
+    # Persist to MongoDB Atlas if available
+    if getattr(request.app.state, "db_available", False):
+        try:
+            from app.config import get_settings
+            from app.database import get_client
+
+            client = get_client()
+            db = client[get_settings().mongodb_db_name]
+            await db.decisions.insert_one(decision)
+        except Exception as exc:
+            logger.warning("Failed to save decision to MongoDB", error=str(exc))
+
     return DecisionResponse(
         decision_id=decision_id,
         recommendation=decision["recommendation"],
@@ -92,8 +104,24 @@ async def request_decision(
 
 
 @router.get("")
-async def list_decisions() -> Any:
+async def list_decisions(request: Request) -> Any:
     """List all pending and recent decisions."""
+    if getattr(request.app.state, "db_available", False):
+        try:
+            from app.config import get_settings
+            from app.database import get_client
+
+            client = get_client()
+            db = client[get_settings().mongodb_db_name]
+            cursor = db.decisions.find({}, {"_id": 0}).sort("created_at", -1).limit(50)
+            decisions = [doc async for doc in cursor]
+            return {
+                "decisions": decisions,
+                "total": len(decisions),
+            }
+        except Exception as exc:
+            logger.warning("Failed to fetch decisions from MongoDB", error=str(exc))
+
     return {
         "decisions": list(_pending_decisions.values()),
         "total": len(_pending_decisions),
@@ -109,16 +137,29 @@ async def action_decision(
     """Approve, reject, or edit a decision recommendation.
 
     This is the human-in-the-loop step. Every action is logged
-    to the immutable audit trail when DB is available.
+    to the immutable audit trail in MongoDB Atlas when available.
 
     Args:
         decision_id: ID of the decision to act on.
         body: Action details (approve/reject/edit).
     """
-    if decision_id not in _pending_decisions:
-        return {"error": "Decision not found"}
+    decision = _pending_decisions.get(decision_id)
+    db = None
 
-    decision = _pending_decisions[decision_id]
+    if getattr(request.app.state, "db_available", False):
+        try:
+            from app.config import get_settings
+            from app.database import get_client
+
+            client = get_client()
+            db = client[get_settings().mongodb_db_name]
+            if not decision:
+                decision = await db.decisions.find_one({"id": decision_id}, {"_id": 0})
+        except Exception as exc:
+            logger.warning("Failed to lookup decision in MongoDB", error=str(exc))
+
+    if not decision:
+        return {"error": "Decision not found"}
 
     # Update status
     status_map = {
@@ -132,11 +173,14 @@ async def action_decision(
     if body.edited_recommendation:
         decision["recommendation"] = body.edited_recommendation
 
-    # Audit logging (if DB is available)
+    # Audit logging & status update in MongoDB Atlas
     audit_logged = False
-    if getattr(request.app.state, "db_available", False):
+    if db is not None:
         try:
-            from app.database import async_session_factory
+            await db.decisions.update_one(
+                {"id": decision_id},
+                {"$set": {"status": new_status.value, "recommendation": decision.get("recommendation", "")}},
+            )
 
             payload = {
                 "decision_id": decision_id,
@@ -145,21 +189,19 @@ async def action_decision(
                 "original_recommendation": decision.get("recommendation", ""),
             }
 
-            async with async_session_factory() as db:
-                audit_entry = AuditLog(
-                    actor_id=body.actor_id,
-                    action=f"decision.{body.action}",
-                    resource_type="decision",
-                    resource_id=decision_id,
-                    payload=payload,
-                    payload_hash=AuditLog.compute_payload_hash(payload),
-                    decision_status=new_status,
-                )
-                db.add(audit_entry)
-                await db.commit()
-                audit_logged = True
-        except Exception:
-            logger.warning("Audit log write failed — DB unavailable")
+            audit_entry = AuditLog(
+                actor_id=body.actor_id,
+                action=f"decision.{body.action}",
+                resource_type="decision",
+                resource_id=decision_id,
+                payload=payload,
+                payload_hash=AuditLog.compute_payload_hash(payload),
+                decision_status=new_status,
+            )
+            await db.audit_log.insert_one(audit_entry.model_dump())
+            audit_logged = True
+        except Exception as exc:
+            logger.warning("Audit log write failed — MongoDB unavailable", error=str(exc))
 
     logger.info(
         "Decision action recorded",
@@ -173,4 +215,5 @@ async def action_decision(
         "status": new_status.value,
         "audit_logged": audit_logged,
     }
+
 

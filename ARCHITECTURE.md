@@ -16,14 +16,14 @@ C4Context
 
     System(sentinel, "SentinelArena", "AI-powered stadium operations platform providing crowd management, navigation, decision support, and multilingual assistance")
 
-    System_Ext(claude, "Anthropic Claude API", "LLM for reasoning, generation, and translation")
+    System_Ext(groq, "Groq Cloud API (LPU Inference)", "Llama 3.3 70B & Llama 3.1 8B for reasoning, generation, and translation")
     System_Ext(weather, "Weather API", "Real-time weather data for venue area")
     System_Ext(iot, "IoT Sensors / Cameras", "Crowd density feeds [simulated in MVP]")
 
     Rel(fan, sentinel, "Uses", "HTTPS/WSS")
     Rel(volunteer, sentinel, "Uses", "HTTPS/WSS")
     Rel(organizer, sentinel, "Uses", "HTTPS/WSS")
-    Rel(sentinel, claude, "Calls", "HTTPS")
+    Rel(sentinel, groq, "Calls", "HTTPS")
     Rel(sentinel, weather, "Polls", "HTTPS")
     Rel(iot, sentinel, "Pushes data", "WebSocket/Redis Streams")
 ```
@@ -51,11 +51,11 @@ C4Container
     }
 
     Container_Boundary(data, "Data Stores") {
-        ContainerDb(postgres, "PostgreSQL + pgvector", "Database", "Users, venues, incidents, SOPs, audit log, embeddings")
+        ContainerDb(mongodb, "MongoDB Atlas", "Cloud Database", "Users, venues, zones, POIs, SOPs, audit log, vector embeddings")
         ContainerDb(redis, "Redis", "Cache/PubSub", "Session cache, rate limits, pub/sub, semantic cache")
     }
 
-    System_Ext(claude, "Anthropic Claude API")
+    System_Ext(groq, "Groq Cloud API (LPU Inference)")
     System_Ext(weather, "Weather API")
 
     Rel(fan, pwa, "Uses")
@@ -67,11 +67,11 @@ C4Container
     Rel(volapp, gateway, "HTTPS/WSS")
 
     Rel(gateway, orchestrator, "Internal API")
-    Rel(gateway, postgres, "Async queries")
+    Rel(gateway, mongodb, "Async queries (Motor)")
     Rel(gateway, redis, "Cache/rate limit")
 
-    Rel(orchestrator, claude, "LLM calls")
-    Rel(orchestrator, postgres, "RAG retrieval")
+    Rel(orchestrator, groq, "LLM calls")
+    Rel(orchestrator, mongodb, "RAG retrieval ($vectorSearch)")
     Rel(orchestrator, redis, "Pub/Sub, cache")
 
     Rel(simulator, redis, "Publishes density data")
@@ -93,7 +93,7 @@ flowchart TB
     subgraph Tools ["Scoped Tools (Allow-listed)"]
         PathTool["Pathfinding Tool<br/>Dijkstra/A* on venue graph"]
         DensityTool["Density Query Tool<br/>Current + historical readings"]
-        SOPTool["SOP Search Tool<br/>RAG over pgvector"]
+        SOPTool["SOP Search Tool<br/>RAG over MongoDB Atlas"]
         WeatherTool["Weather Tool<br/>Current conditions"]
     end
 
@@ -105,9 +105,9 @@ flowchart TB
     end
 
     subgraph Adapters ["Adapters (Implementations)"]
-        ClaudeAdapter["Anthropic Claude Adapter"]
+        GroqAdapter["Groq Llama Adapter"]
         MockLLM["Mock LLM Adapter"]
-        PGVectorAdapter["pgvector Adapter"]
+        AtlasVectorAdapter["MongoDB Atlas Vector Adapter"]
         MockWeather["Mock Weather Adapter"]
         RedisCrowd["Redis Crowd Source"]
     end
@@ -125,9 +125,9 @@ flowchart TB
     DecisionAgent --> WeatherTool
     DecisionAgent --> DensityTool
 
-    LLMPort -.-> ClaudeAdapter
+    LLMPort -.-> GroqAdapter
     LLMPort -.-> MockLLM
-    VectorPort -.-> PGVectorAdapter
+    VectorPort -.-> AtlasVectorAdapter
     WeatherPort -.-> MockWeather
     CrowdPort -.-> RedisCrowd
 ```
@@ -141,21 +141,21 @@ sequenceDiagram
     participant Router as Router Node
     participant Nav as Navigation Agent
     participant Path as Pathfinding Tool
-    participant LLM as Claude API
+    participant LLM as Groq LPU API
     participant Lang as Language Agent
 
     Fan->>GW: POST /api/v1/chat {message, locale}
     GW->>GW: Validate JWT + rate limit
-    GW->>Router: Classify intent
+    GW->>Router: Classify intent (Llama 3.1 8B)
     Router->>Nav: navigation_intent detected
-    Nav->>LLM: Extract constraints (accessibility, avoid_stairs, destination)
+    Nav->>LLM: Extract constraints (Llama 3.3 70B)
     LLM-->>Nav: {destination: "Gate 3", constraints: ["no_stairs"]}
     Nav->>Path: find_route(from, to, constraints)
     Path-->>Nav: {route: [...nodes], distance: 240m, estimated_time: "3 min"}
     Nav->>LLM: Generate turn-by-turn instructions from route JSON
     LLM-->>Nav: "Head straight past Section B, take the elevator to Level 2..."
     Nav->>Lang: Translate to fan's locale
-    Lang->>LLM: Translate to Hindi
+    Lang->>LLM: Translate to Hindi (Llama 3.1 8B)
     LLM-->>Lang: "सेक्शन B से सीधे जाएं, लेवल 2 तक लिफ्ट लें..."
     Lang-->>GW: SSE stream response
     GW-->>Fan: Streamed translated response + route overlay data
@@ -175,7 +175,7 @@ flowchart LR
         Auth["JWT Auth<br/>Short-lived access tokens"]
         RBAC["RBAC Middleware<br/>Role-based route guards"]
         Validate["Input Validation<br/>Pydantic v2 schemas"]
-        RateLimit["Rate Limiter<br/>Token bucket via Redis"]
+        RateLimit["Rate Limiter<br/>Sliding Window Algorithm"]
     end
 
     subgraph AI ["AI Layer"]
@@ -187,14 +187,14 @@ flowchart LR
 
     subgraph Data ["Data Layer"]
         Argon["Argon2id Hashing"]
-        Parameterized["Parameterized Queries<br/>SQLAlchemy ORM"]
-        AuditLog["Immutable Audit Log"]
+        PydanticSchemas["Pydantic v2 Schemas<br/>Motor Async I/O"]
+        AuditLog["Immutable Audit Log<br/>MongoDB Atlas"]
     end
 
     Client --> CORS --> Headers --> Auth --> RBAC --> Validate --> RateLimit
     RateLimit --> PromptFence --> ToolAllow --> OutputSanitize --> PIIRedact
     PIIRedact --> Argon
-    PIIRedact --> Parameterized
+    PIIRedact --> PydanticSchemas
     PIIRedact --> AuditLog
 ```
 
@@ -204,29 +204,29 @@ flowchart LR
 flowchart TB
     subgraph Docker ["Docker Compose Stack"]
         subgraph Services ["Application Services"]
-            GW["API Gateway<br/>:8000"]
-            Sim["Crowd Simulator<br/>:8001"]
-            Dash["Web Dashboard<br/>:3000"]
-            PWA["Fan PWA<br/>:3001"]
-            Vol["Volunteer App<br/>:3002"]
-        end
-
-        subgraph Infra ["Infrastructure"]
-            PG["PostgreSQL 16<br/>+ pgvector<br/>:5432"]
-            RD["Redis 7<br/>:6379"]
-        end
+        GW["API Gateway<br/>:8000"]
+        Sim["Crowd Simulator<br/>:8001"]
+        Dash["Web Dashboard<br/>:3000"]
+        PWA["Fan PWA<br/>:3001"]
+        Vol["Volunteer App<br/>:3002"]
     end
 
-    GW --> PG
+        subgraph Infra ["Local Cache"]
+        RD["Redis 7<br/>:6379"]
+    end
+    end
+
     GW --> RD
     Sim --> RD
 
-    subgraph External ["External Services"]
-        Claude["Anthropic Claude API"]
+    subgraph External ["Cloud Services"]
+        Mongo["MongoDB Atlas<br/>Cloud Cluster"]
+        Groq["Groq Cloud API<br/>LPU Inference"]
         Weather["Weather API"]
     end
 
-    GW --> Claude
+    GW --> Mongo
+    GW --> Groq
     GW --> Weather
 ```
 
@@ -241,3 +241,4 @@ See the [ADR/](./ADR/) folder for detailed Architecture Decision Records:
 | [ADR-003](./ADR/003-fastapi-unified-gateway.md) | Unified FastAPI gateway | Consistent async Python stack, shared auth/middleware |
 | [ADR-004](./ADR/004-mock-adapter-pattern.md) | Mock adapter pattern for external APIs | Clean testing, zero-config dev, swappable in production |
 | [ADR-005](./ADR/005-dual-model-strategy.md) | Dual-model cost strategy | Fast model for routing, reasoning model for synthesis |
+| [ADR-006](./ADR/006-mongodb-groq-migration.md) | MongoDB Atlas + Groq LPU | Ultra-fast inference (~300+ tps) and document-oriented cloud storage |

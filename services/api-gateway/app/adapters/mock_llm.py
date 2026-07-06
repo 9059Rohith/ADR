@@ -27,7 +27,7 @@ class MockLLMAdapter(LLMProvider):
     - CI pipeline (no API costs)
 
     DOCUMENTED AS MOCK: Judges should note this is explicitly a mock adapter.
-    Swap in a real API key via ANTHROPIC_API_KEY to use real Claude responses.
+    Swap in a real API key via GROQ_API_KEY to use real Groq Llama responses.
     """
 
     MODEL_NAME = "mock-llm-v1"

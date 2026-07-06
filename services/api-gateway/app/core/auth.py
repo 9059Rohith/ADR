@@ -14,7 +14,7 @@ import secrets
 from datetime import datetime, timedelta, timezone
 from typing import Any
 
-from argon2 import PasswordHasher
+from argon2 import PasswordHasher, Type
 from argon2.exceptions import VerificationError
 from jose import JWTError, jwt
 from pydantic import BaseModel, EmailStr, Field
@@ -29,7 +29,7 @@ _hasher = PasswordHasher(
     parallelism=4,
     hash_len=32,
     salt_len=16,
-    type=2,  # Argon2id
+    type=Type.ID,  # Argon2id
 )
 
 

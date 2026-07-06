@@ -412,7 +412,7 @@ class AgentOrchestrator:
     def _get_relevant_sops(self, query: str) -> str:
         """Get relevant SOP documents (simple keyword match for MVP).
 
-        In production, this would use pgvector similarity search.
+        In production, this would use MongoDB Atlas vector search ($vectorSearch) or Atlas text search.
         """
         if not self._sop_docs:
             return self._get_default_sops()

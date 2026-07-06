@@ -4,21 +4,6 @@ services:
   # ============================================================
   # Infrastructure
   # ============================================================
-  postgres:
-    image: pgvector/pgvector:pg16
-    environment:
-      POSTGRES_USER: ${POSTGRES_USER:-sentinel}
-      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:-sentinel_dev}
-      POSTGRES_DB: ${POSTGRES_DB:-sentinel_arena}
-    ports:
-      - "5432:5432"
-    volumes:
-      - postgres_data:/var/lib/postgresql/data
-    healthcheck:
-      test: ["CMD-SHELL", "pg_isready -U sentinel"]
-      interval: 5s
-      timeout: 5s
-      retries: 5
 
   redis:
     image: redis:7-alpine
@@ -42,7 +27,8 @@ services:
     ports:
       - "${API_GATEWAY_PORT:-8000}:8000"
     environment:
-      - DATABASE_URL=postgresql+asyncpg://${POSTGRES_USER:-sentinel}:${POSTGRES_PASSWORD:-sentinel_dev}@postgres:5432/${POSTGRES_DB:-sentinel_arena}
+      - MONGODB_URI=${MONGODB_URI:-mongodb://localhost:27017}
+      - MONGODB_DB_NAME=${MONGODB_DB_NAME:-sentinel_arena}
       - REDIS_URL=redis://redis:6379/0
       - JWT_SECRET_KEY=${JWT_SECRET_KEY:-dev_secret_change_in_production}
       - JWT_ALGORITHM=${JWT_ALGORITHM:-HS256}
@@ -50,12 +36,10 @@ services:
       - JWT_REFRESH_TOKEN_EXPIRE_DAYS=${JWT_REFRESH_TOKEN_EXPIRE_DAYS:-7}
       - ALLOWED_ORIGINS=${ALLOWED_ORIGINS:-http://localhost:3000,http://localhost:3001,http://localhost:3002}
       - LOG_LEVEL=${LOG_LEVEL:-info}
-      - ANTHROPIC_API_KEY=${ANTHROPIC_API_KEY:-}
-      - ANTHROPIC_FAST_MODEL=${ANTHROPIC_FAST_MODEL:-claude-sonnet-4-20250514}
-      - ANTHROPIC_REASONING_MODEL=${ANTHROPIC_REASONING_MODEL:-claude-sonnet-4-20250514}
+      - GROQ_API_KEY=${GROQ_API_KEY:-}
+      - GROQ_FAST_MODEL=${GROQ_FAST_MODEL:-llama-3.1-8b-instant}
+      - GROQ_REASONING_MODEL=${GROQ_REASONING_MODEL:-llama-3.3-70b-versatile}
     depends_on:
-      postgres:
-        condition: service_healthy
       redis:
         condition: service_healthy
     volumes:
@@ -121,5 +105,4 @@ services:
       - api-gateway
 
 volumes:
-  postgres_data:
   redis_data:

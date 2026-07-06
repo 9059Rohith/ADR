@@ -13,8 +13,7 @@ from typing import Any
 
 import structlog
 from fastapi import APIRouter, Depends, HTTPException, Request, status
-from sqlalchemy import select
-from sqlalchemy.ext.asyncio import AsyncSession
+from motor.motor_asyncio import AsyncIOMotorDatabase
 
 from app.core.auth import (
     AuthResponse,
@@ -38,7 +37,7 @@ def _check_db(request: Request) -> None:
     if not getattr(request.app.state, "db_available", False):
         raise HTTPException(
             status_code=status.HTTP_503_SERVICE_UNAVAILABLE,
-            detail="Database not available. Auth requires PostgreSQL.",
+            detail="Database not available. Auth requires MongoDB Atlas.",
         )
 
 
@@ -46,13 +45,13 @@ def _check_db(request: Request) -> None:
 async def register(
     request: Request,
     body: RegisterRequest,
-    db: AsyncSession = Depends(get_db),
+    db: AsyncIOMotorDatabase[Any] = Depends(get_db),
 ) -> Any:
     """Register a new user account.
 
     Args:
         body: Registration data (email, password, display name, role).
-        db: Database session.
+        db: MongoDB database instance.
 
     Returns:
         AuthResponse with JWT tokens.
@@ -62,9 +61,9 @@ async def register(
     """
     _check_db(request)
 
-    # Check for existing user
-    result = await db.execute(select(User).where(User.email == body.email))
-    if result.scalar_one_or_none():
+    # Check for existing user in MongoDB
+    existing = await db.users.find_one({"email": body.email})
+    if existing:
         raise HTTPException(
             status_code=status.HTTP_409_CONFLICT,
             detail="Email already registered",
@@ -79,8 +78,8 @@ async def register(
         role=body.role,
         locale=Locale(locale_value),
     )
-    db.add(user)
-    await db.flush()
+    
+    await db.users.insert_one(user.model_dump())
 
     # Generate tokens
     tokens = create_token_pair(user.id, user.role)
@@ -102,15 +101,20 @@ async def register(
 async def login(
     request: Request,
     body: LoginRequest,
-    db: AsyncSession = Depends(get_db),
+    db: AsyncIOMotorDatabase[Any] = Depends(get_db),
 ) -> Any:
     """Authenticate user and return JWT tokens."""
     _check_db(request)
 
-    result = await db.execute(select(User).where(User.email == body.email))
-    user = result.scalar_one_or_none()
+    user_doc = await db.users.find_one({"email": body.email})
+    if not user_doc:
+        raise HTTPException(
+            status_code=status.HTTP_401_UNAUTHORIZED,
+            detail="Invalid email or password",
+        )
 
-    if not user or not verify_password(body.password, user.hashed_password):
+    user = User.model_validate(user_doc)
+    if not verify_password(body.password, user.hashed_password):
         raise HTTPException(
             status_code=status.HTTP_401_UNAUTHORIZED,
             detail="Invalid email or password",
@@ -141,7 +145,7 @@ async def login(
 async def refresh_token(
     request: Request,
     body: RefreshRequest,
-    db: AsyncSession = Depends(get_db),
+    db: AsyncIOMotorDatabase[Any] = Depends(get_db),
 ) -> Any:
     """Refresh an expired access token using a valid refresh token."""
     _check_db(request)
@@ -159,11 +163,16 @@ async def refresh_token(
             detail="Invalid refresh token",
         )
 
-    # Verify user still exists and is active
-    result = await db.execute(select(User).where(User.id == payload.sub))
-    user = result.scalar_one_or_none()
+    # Verify user still exists and is active in MongoDB
+    user_doc = await db.users.find_one({"id": payload.sub})
+    if not user_doc:
+        raise HTTPException(
+            status_code=status.HTTP_401_UNAUTHORIZED,
+            detail="User not found or deactivated",
+        )
 
-    if not user or not user.is_active:
+    user = User.model_validate(user_doc)
+    if not user.is_active:
         raise HTTPException(
             status_code=status.HTTP_401_UNAUTHORIZED,
             detail="User not found or deactivated",
@@ -180,3 +189,4 @@ async def refresh_token(
         refresh_token=tokens.refresh_token,
         expires_in=tokens.expires_in,
     )
+

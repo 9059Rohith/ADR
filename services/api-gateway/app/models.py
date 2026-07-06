@@ -1,7 +1,7 @@
 """SentinelArena API Gateway — Database Models.
 
-SQLAlchemy 2.0 async models for the complete data layer:
-users, venues, zones, POIs, edges, incidents, SOP documents, audit log, crowd readings.
+Pydantic v2 document schemas for MongoDB Atlas:
+users, venues, zones, POIs, edges, incidents, SOP documents, audit log, crowd readings, decisions.
 """
 
 from __future__ import annotations
@@ -9,26 +9,11 @@ from __future__ import annotations
 import enum
 import hashlib
 import json
-from datetime import datetime
-from typing import Any, Optional
+from datetime import datetime, timezone
+from typing import Any
 from uuid import uuid4
 
-from pgvector.sqlalchemy import Vector
-from sqlalchemy import (
-    DateTime,
-    Enum,
-    Float,
-    ForeignKey,
-    Index,
-    Integer,
-    String,
-    Text,
-    func,
-)
-from sqlalchemy.dialects.postgresql import JSONB, UUID
-from sqlalchemy.orm import Mapped, mapped_column, relationship
-
-from app.database import Base
+from pydantic import BaseModel, ConfigDict, Field
 
 
 # ============================================================
@@ -103,37 +88,37 @@ class EdgeAccessibility(str, enum.Enum):
 
 
 # ============================================================
+# Base MongoDB Document Model
+# ============================================================
+
+
+class MongoDoc(BaseModel):
+    """Base schema for all MongoDB documents."""
+
+    model_config = ConfigDict(
+        populate_by_name=True,
+        extra="ignore",
+        from_attributes=True,
+    )
+
+
+# ============================================================
 # User Model
 # ============================================================
 
 
-class User(Base):
+class User(MongoDoc):
     """User account with role-based access control."""
 
-    __tablename__ = "users"
-
-    id: Mapped[str] = mapped_column(
-        UUID(as_uuid=False), primary_key=True, default=lambda: str(uuid4())
-    )
-    email: Mapped[str] = mapped_column(String(255), unique=True, nullable=False, index=True)
-    hashed_password: Mapped[str] = mapped_column(String(255), nullable=False)
-    display_name: Mapped[str] = mapped_column(String(100), nullable=False)
-    role: Mapped[UserRole] = mapped_column(
-        Enum(UserRole), nullable=False, default=UserRole.FAN
-    )
-    locale: Mapped[Locale] = mapped_column(
-        Enum(Locale), nullable=False, default=Locale.EN
-    )
-    is_active: Mapped[bool] = mapped_column(default=True)
-    created_at: Mapped[datetime] = mapped_column(
-        DateTime(timezone=True), server_default=func.now()
-    )
-    updated_at: Mapped[datetime] = mapped_column(
-        DateTime(timezone=True), server_default=func.now(), onupdate=func.now()
-    )
-
-    # Relationships
-    incidents: Mapped[list["Incident"]] = relationship(back_populates="reporter")
+    id: str = Field(default_factory=lambda: str(uuid4()))
+    email: str
+    hashed_password: str
+    display_name: str
+    role: UserRole = UserRole.FAN
+    locale: Locale = Locale.EN
+    is_active: bool = True
+    created_at: datetime = Field(default_factory=lambda: datetime.now(timezone.utc))
+    updated_at: datetime = Field(default_factory=lambda: datetime.now(timezone.utc))
 
 
 # ============================================================
@@ -141,119 +126,60 @@ class User(Base):
 # ============================================================
 
 
-class Venue(Base):
+class Venue(MongoDoc):
     """Tournament venue."""
 
-    __tablename__ = "venues"
-
-    id: Mapped[str] = mapped_column(
-        UUID(as_uuid=False), primary_key=True, default=lambda: str(uuid4())
-    )
-    name: Mapped[str] = mapped_column(String(200), nullable=False)
-    description: Mapped[Optional[str]] = mapped_column(Text)
-    address: Mapped[Optional[str]] = mapped_column(String(500))
-    total_capacity: Mapped[int] = mapped_column(Integer, nullable=False, default=10000)
-    map_svg_url: Mapped[Optional[str]] = mapped_column(String(500))
-    metadata_json: Mapped[Optional[dict[str, Any]]] = mapped_column(JSONB)
-    created_at: Mapped[datetime] = mapped_column(
-        DateTime(timezone=True), server_default=func.now()
-    )
-
-    # Relationships
-    zones: Mapped[list["Zone"]] = relationship(back_populates="venue", cascade="all, delete-orphan")
-    pois: Mapped[list["POI"]] = relationship(back_populates="venue", cascade="all, delete-orphan")
-    edges: Mapped[list["Edge"]] = relationship(back_populates="venue", cascade="all, delete-orphan")
+    id: str = Field(default_factory=lambda: str(uuid4()))
+    name: str
+    description: str | None = None
+    address: str | None = None
+    total_capacity: int = 10000
+    map_svg_url: str | None = None
+    metadata_json: dict[str, Any] | None = None
+    created_at: datetime = Field(default_factory=lambda: datetime.now(timezone.utc))
 
 
-class Zone(Base):
+class Zone(MongoDoc):
     """Venue zone for crowd density tracking."""
 
-    __tablename__ = "zones"
-
-    id: Mapped[str] = mapped_column(
-        UUID(as_uuid=False), primary_key=True, default=lambda: str(uuid4())
-    )
-    venue_id: Mapped[str] = mapped_column(
-        UUID(as_uuid=False), ForeignKey("venues.id", ondelete="CASCADE"), nullable=False
-    )
-    name: Mapped[str] = mapped_column(String(100), nullable=False)
-    code: Mapped[str] = mapped_column(String(20), nullable=False)
-    capacity: Mapped[int] = mapped_column(Integer, nullable=False)
-    floor_level: Mapped[int] = mapped_column(Integer, nullable=False, default=0)
-    svg_path_id: Mapped[Optional[str]] = mapped_column(String(100))
-    metadata_json: Mapped[Optional[dict[str, Any]]] = mapped_column(JSONB)
-
-    # Relationships
-    venue: Mapped["Venue"] = relationship(back_populates="zones")
-    readings: Mapped[list["CrowdReading"]] = relationship(back_populates="zone")
-
-    __table_args__ = (
-        Index("ix_zones_venue_code", "venue_id", "code", unique=True),
-    )
+    id: str = Field(default_factory=lambda: str(uuid4()))
+    venue_id: str
+    name: str
+    code: str
+    capacity: int
+    floor_level: int = 0
+    svg_path_id: str | None = None
+    metadata_json: dict[str, Any] | None = None
 
 
-class POI(Base):
+class POI(MongoDoc):
     """Point of Interest — graph node for navigation."""
 
-    __tablename__ = "pois"
-
-    id: Mapped[str] = mapped_column(
-        UUID(as_uuid=False), primary_key=True, default=lambda: str(uuid4())
-    )
-    venue_id: Mapped[str] = mapped_column(
-        UUID(as_uuid=False), ForeignKey("venues.id", ondelete="CASCADE"), nullable=False
-    )
-    zone_id: Mapped[Optional[str]] = mapped_column(
-        UUID(as_uuid=False), ForeignKey("zones.id", ondelete="SET NULL")
-    )
-    name: Mapped[str] = mapped_column(String(200), nullable=False)
-    poi_type: Mapped[str] = mapped_column(String(50), nullable=False)
-    floor_level: Mapped[int] = mapped_column(Integer, nullable=False, default=0)
-    x_coord: Mapped[float] = mapped_column(Float, nullable=False)
-    y_coord: Mapped[float] = mapped_column(Float, nullable=False)
-    is_accessible: Mapped[bool] = mapped_column(default=True)
-    amenities: Mapped[Optional[dict[str, Any]]] = mapped_column(JSONB)
-    metadata_json: Mapped[Optional[dict[str, Any]]] = mapped_column(JSONB)
-
-    # Relationships
-    venue: Mapped["Venue"] = relationship(back_populates="pois")
-
-    __table_args__ = (
-        Index("ix_pois_venue_type", "venue_id", "poi_type"),
-    )
+    id: str = Field(default_factory=lambda: str(uuid4()))
+    venue_id: str
+    zone_id: str | None = None
+    name: str
+    poi_type: str
+    floor_level: int = 0
+    x_coord: float
+    y_coord: float
+    is_accessible: bool = True
+    amenities: dict[str, Any] | None = None
+    metadata_json: dict[str, Any] | None = None
 
 
-class Edge(Base):
+class Edge(MongoDoc):
     """Walkable path between POIs — graph edge for navigation."""
 
-    __tablename__ = "edges"
-
-    id: Mapped[str] = mapped_column(
-        UUID(as_uuid=False), primary_key=True, default=lambda: str(uuid4())
-    )
-    venue_id: Mapped[str] = mapped_column(
-        UUID(as_uuid=False), ForeignKey("venues.id", ondelete="CASCADE"), nullable=False
-    )
-    from_poi_id: Mapped[str] = mapped_column(
-        UUID(as_uuid=False), ForeignKey("pois.id", ondelete="CASCADE"), nullable=False
-    )
-    to_poi_id: Mapped[str] = mapped_column(
-        UUID(as_uuid=False), ForeignKey("pois.id", ondelete="CASCADE"), nullable=False
-    )
-    distance_meters: Mapped[float] = mapped_column(Float, nullable=False)
-    accessibility: Mapped[EdgeAccessibility] = mapped_column(
-        Enum(EdgeAccessibility), nullable=False, default=EdgeAccessibility.WALKWAY
-    )
-    is_bidirectional: Mapped[bool] = mapped_column(default=True)
-    congestion_weight: Mapped[float] = mapped_column(Float, nullable=False, default=1.0)
-    metadata_json: Mapped[Optional[dict[str, Any]]] = mapped_column(JSONB)
-
-    # Relationships
-    venue: Mapped["Venue"] = relationship(back_populates="edges")
-
-    __table_args__ = (
-        Index("ix_edges_from_to", "from_poi_id", "to_poi_id"),
-    )
+    id: str = Field(default_factory=lambda: str(uuid4()))
+    venue_id: str
+    from_poi_id: str
+    to_poi_id: str
+    distance_meters: float
+    accessibility: EdgeAccessibility = EdgeAccessibility.WALKWAY
+    is_bidirectional: bool = True
+    congestion_weight: float = 1.0
+    metadata_json: dict[str, Any] | None = None
 
 
 # ============================================================
@@ -261,51 +187,23 @@ class Edge(Base):
 # ============================================================
 
 
-class Incident(Base):
+class Incident(MongoDoc):
     """Incident report filed by volunteers/staff."""
 
-    __tablename__ = "incidents"
-
-    id: Mapped[str] = mapped_column(
-        UUID(as_uuid=False), primary_key=True, default=lambda: str(uuid4())
-    )
-    reporter_id: Mapped[str] = mapped_column(
-        UUID(as_uuid=False), ForeignKey("users.id"), nullable=False
-    )
-    venue_id: Mapped[str] = mapped_column(
-        UUID(as_uuid=False), ForeignKey("venues.id"), nullable=False
-    )
-    zone_id: Mapped[Optional[str]] = mapped_column(
-        UUID(as_uuid=False), ForeignKey("zones.id")
-    )
-    title: Mapped[str] = mapped_column(String(300), nullable=False)
-    description: Mapped[str] = mapped_column(Text, nullable=False)
-    severity: Mapped[IncidentSeverity] = mapped_column(
-        Enum(IncidentSeverity), nullable=False, default=IncidentSeverity.MEDIUM
-    )
-    status: Mapped[IncidentStatus] = mapped_column(
-        Enum(IncidentStatus), nullable=False, default=IncidentStatus.REPORTED
-    )
-    original_locale: Mapped[Locale] = mapped_column(
-        Enum(Locale), nullable=False, default=Locale.EN
-    )
-    ai_triage_summary: Mapped[Optional[str]] = mapped_column(Text)
-    ai_suggested_actions: Mapped[Optional[dict[str, Any]]] = mapped_column(JSONB)
-    photo_url: Mapped[Optional[str]] = mapped_column(String(500))
-    created_at: Mapped[datetime] = mapped_column(
-        DateTime(timezone=True), server_default=func.now()
-    )
-    updated_at: Mapped[datetime] = mapped_column(
-        DateTime(timezone=True), server_default=func.now(), onupdate=func.now()
-    )
-
-    # Relationships
-    reporter: Mapped["User"] = relationship(back_populates="incidents")
-
-    __table_args__ = (
-        Index("ix_incidents_status_severity", "status", "severity"),
-        Index("ix_incidents_venue_created", "venue_id", "created_at"),
-    )
+    id: str = Field(default_factory=lambda: str(uuid4()))
+    reporter_id: str
+    venue_id: str = "venue-demo"
+    zone_id: str | None = None
+    title: str
+    description: str
+    severity: IncidentSeverity = IncidentSeverity.MEDIUM
+    status: IncidentStatus = IncidentStatus.REPORTED
+    original_locale: Locale = Locale.EN
+    ai_triage_summary: str | None = None
+    ai_suggested_actions: list[str] | dict[str, Any] | None = None
+    photo_url: str | None = None
+    created_at: datetime = Field(default_factory=lambda: datetime.now(timezone.utc))
+    updated_at: datetime = Field(default_factory=lambda: datetime.now(timezone.utc))
 
 
 # ============================================================
@@ -313,39 +211,21 @@ class Incident(Base):
 # ============================================================
 
 
-class SOPDocument(Base):
+class SOPDocument(MongoDoc):
     """Standard Operating Procedure document for RAG retrieval.
 
-    Each row represents a chunk of an SOP document, embedded as a vector
-    for similarity search via pgvector.
+    Each document represents a chunk of an SOP document, stored with optional
+    vector embedding for similarity search.
     """
 
-    __tablename__ = "sop_documents"
-
-    id: Mapped[str] = mapped_column(
-        UUID(as_uuid=False), primary_key=True, default=lambda: str(uuid4())
-    )
-    venue_id: Mapped[str] = mapped_column(
-        UUID(as_uuid=False), ForeignKey("venues.id"), nullable=False
-    )
-    title: Mapped[str] = mapped_column(String(300), nullable=False)
-    section: Mapped[str] = mapped_column(String(200), nullable=False)
-    content: Mapped[str] = mapped_column(Text, nullable=False)
-    embedding: Mapped[Optional[list[float]]] = mapped_column(Vector(384))
-    metadata_json: Mapped[Optional[dict[str, Any]]] = mapped_column(JSONB)
-    created_at: Mapped[datetime] = mapped_column(
-        DateTime(timezone=True), server_default=func.now()
-    )
-
-    __table_args__ = (
-        Index(
-            "ix_sop_embedding_hnsw",
-            "embedding",
-            postgresql_using="hnsw",
-            postgresql_with={"m": 16, "ef_construction": 64},
-            postgresql_ops={"embedding": "vector_cosine_ops"},
-        ),
-    )
+    id: str = Field(default_factory=lambda: str(uuid4()))
+    venue_id: str = "venue-demo"
+    title: str
+    section: str
+    content: str
+    embedding: list[float] | None = None
+    metadata_json: dict[str, Any] | None = None
+    created_at: datetime = Field(default_factory=lambda: datetime.now(timezone.utc))
 
 
 # ============================================================
@@ -353,69 +233,38 @@ class SOPDocument(Base):
 # ============================================================
 
 
-class CrowdReading(Base):
-    """Time-series crowd density reading per zone.
+class CrowdReading(MongoDoc):
+    """Time-series crowd density reading per zone."""
 
-    Generated by the Crowd Simulator service (documented as simulated data).
-    """
-
-    __tablename__ = "crowd_readings"
-
-    id: Mapped[str] = mapped_column(
-        UUID(as_uuid=False), primary_key=True, default=lambda: str(uuid4())
-    )
-    zone_id: Mapped[str] = mapped_column(
-        UUID(as_uuid=False), ForeignKey("zones.id", ondelete="CASCADE"), nullable=False
-    )
-    count: Mapped[int] = mapped_column(Integer, nullable=False)
-    density_pct: Mapped[float] = mapped_column(Float, nullable=False)
-    timestamp: Mapped[datetime] = mapped_column(
-        DateTime(timezone=True), server_default=func.now(), index=True
-    )
-
-    # Relationships
-    zone: Mapped["Zone"] = relationship(back_populates="readings")
-
-    __table_args__ = (
-        Index("ix_crowd_zone_time", "zone_id", "timestamp"),
-    )
+    id: str = Field(default_factory=lambda: str(uuid4()))
+    zone_id: str
+    count: int
+    density_pct: float
+    timestamp: datetime = Field(default_factory=lambda: datetime.now(timezone.utc))
 
 
 # ============================================================
-# Audit Log (Immutable)
+# Audit Log & Decision Models
 # ============================================================
 
 
-class AuditLog(Base):
+class AuditLog(MongoDoc):
     """Immutable audit trail for organizer decisions.
 
     Records every approve/reject/broadcast action with actor,
     timestamp, and SHA-256 payload hash for integrity verification.
     """
 
-    __tablename__ = "audit_log"
-
-    id: Mapped[str] = mapped_column(
-        UUID(as_uuid=False), primary_key=True, default=lambda: str(uuid4())
-    )
-    actor_id: Mapped[str] = mapped_column(
-        UUID(as_uuid=False), ForeignKey("users.id"), nullable=False
-    )
-    action: Mapped[str] = mapped_column(String(100), nullable=False)
-    resource_type: Mapped[str] = mapped_column(String(100), nullable=False)
-    resource_id: Mapped[str] = mapped_column(String(100), nullable=False)
-    payload: Mapped[Optional[dict[str, Any]]] = mapped_column(JSONB)
-    payload_hash: Mapped[str] = mapped_column(String(64), nullable=False)
-    decision_status: Mapped[Optional[DecisionStatus]] = mapped_column(Enum(DecisionStatus))
-    ip_address: Mapped[Optional[str]] = mapped_column(String(45))
-    created_at: Mapped[datetime] = mapped_column(
-        DateTime(timezone=True), server_default=func.now()
-    )
-
-    __table_args__ = (
-        Index("ix_audit_actor_time", "actor_id", "created_at"),
-        Index("ix_audit_resource", "resource_type", "resource_id"),
-    )
+    id: str = Field(default_factory=lambda: str(uuid4()))
+    actor_id: str
+    action: str
+    resource_type: str
+    resource_id: str
+    payload: dict[str, Any] | None = None
+    payload_hash: str
+    decision_status: DecisionStatus | None = None
+    ip_address: str | None = None
+    created_at: datetime = Field(default_factory=lambda: datetime.now(timezone.utc))
 
     @staticmethod
     def compute_payload_hash(payload: dict[str, Any] | None) -> str:
@@ -424,3 +273,15 @@ class AuditLog(Base):
             return hashlib.sha256(b"null").hexdigest()
         canonical = json.dumps(payload, sort_keys=True, separators=(",", ":"))
         return hashlib.sha256(canonical.encode()).hexdigest()
+
+
+class DecisionDoc(MongoDoc):
+    """AI-generated decision recommendation stored in MongoDB."""
+
+    id: str = Field(default_factory=lambda: str(uuid4()))
+    query: str
+    recommendation: str
+    sources: list[str] = []
+    status: DecisionStatus = DecisionStatus.PENDING
+    created_at: datetime = Field(default_factory=lambda: datetime.now(timezone.utc))
+
