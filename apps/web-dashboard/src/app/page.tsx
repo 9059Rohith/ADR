@@ -114,7 +114,7 @@ function AuthScreen({ onLogin }: { onLogin: (user: AuthUser) => void }) {
     const body =
       mode === "login"
         ? { email, password }
-        : { email, password, display_name: displayName || email?.split("@")[0] || "user", role };
+        : { email, password, display_name: displayName || String(email || "user").split("@")[0] as string, role };
 
     try {
       const res = await fetch(`${API_URL}/api/v1/auth/${endpoint}`, {
@@ -144,7 +144,7 @@ function AuthScreen({ onLogin }: { onLogin: (user: AuthUser) => void }) {
       const demoUser: AuthUser = {
         user_id: "demo-user",
         email: email || "",
-        display_name: (email ?? "demo").split("@")[0] ?? "demo",
+        display_name: String(email || "demo").split("@")[0] as string,
         role: "admin",
         access_token: "demo-token",
         refresh_token: "demo-refresh",

@@ -70,7 +70,7 @@ function LoginScreen({ onLogin }: { onLogin: (user: AuthUser) => void }) {
     const body =
       mode === "login"
         ? { email, password }
-        : { email, password, display_name: displayName || email?.split("@")[0] || "volunteer", role: "volunteer" };
+        : { email, password, display_name: displayName || String(email || "volunteer").split("@")[0] as string, role: "volunteer" };
 
     try {
       const res = await fetch(`${API_URL}/api/v1/auth/${endpoint}`, {
@@ -99,7 +99,7 @@ function LoginScreen({ onLogin }: { onLogin: (user: AuthUser) => void }) {
       const demoUser: AuthUser = {
         user_id: "demo-vol",
         email: email || "",
-        display_name: (email ?? "demo").split("@")[0] ?? "volunteer",
+        display_name: String(email || "volunteer").split("@")[0] as string,
         role: "volunteer",
         access_token: "demo-token",
       };
