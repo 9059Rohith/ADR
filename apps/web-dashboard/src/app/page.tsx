@@ -579,7 +579,7 @@ export default function DashboardPage() {
             </span>
             <span className={`stat-change ${criticalZones.length > 0 ? "negative" : "positive"}`}>
               {criticalZones.length > 0
-                ? criticalZones.map((z) => z.zone_name.split("—")[0].trim()).join(", ")
+                ? criticalZones.map((z) => (z?.zone_name ?? "").split("—")[0]?.trim() ?? z?.zone_name ?? "Zone").join(", ")
                 : "All zones normal"}
             </span>
           </div>
@@ -636,7 +636,7 @@ export default function DashboardPage() {
                     tabIndex={0}
                   >
                     <span className="heatmap-zone-name">
-                      {zone.zone_name.split("—")[0].trim()}
+                      {(zone?.zone_name ?? "Zone").split("—")[0]?.trim() ?? zone?.zone_name ?? "Zone"}
                     </span>
                     <span className="heatmap-zone-pct">
                       {zone.current_density_pct.toFixed(0)}%
