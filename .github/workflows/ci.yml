@@ -132,16 +132,12 @@ jobs:
     needs: [unit-tests-ts, unit-tests-python]
     runs-on: ubuntu-latest
     services:
-      postgres:
-        image: pgvector/pgvector:pg16
-        env:
-          POSTGRES_USER: sentinel
-          POSTGRES_PASSWORD: test_password
-          POSTGRES_DB: sentinel_test
+      mongodb:
+        image: mongo:7
         ports:
-          - 5432:5432
+          - 27017:27017
         options: >-
-          --health-cmd "pg_isready -U sentinel"
+          --health-cmd "mongosh --eval 'db.runCommand({ping: 1})'"
           --health-interval 5s
           --health-timeout 5s
           --health-retries 5
@@ -168,9 +164,11 @@ jobs:
 
       - name: Run integration tests
         env:
-          DATABASE_URL: postgresql+asyncpg://sentinel:test_password@localhost:5432/sentinel_test
+          MONGODB_URI: mongodb://localhost:27017
+          MONGODB_DB_NAME: sentinel_test
           REDIS_URL: redis://localhost:6379/0
           JWT_SECRET_KEY: test_secret_key_ci_only
+          GROQ_API_KEY: test_key_ci
         run: |
           cd services/api-gateway
           pytest tests/integration -v

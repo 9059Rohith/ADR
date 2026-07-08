@@ -6,6 +6,7 @@ import { useState, useRef, useEffect, useCallback } from "react";
  * SentinelArena — Fan PWA
  *
  * Mobile-first conversational AI assistant for venue fans:
+ * - JWT Authentication with demo login (pre-filled credentials)
  * - Natural language chat with streaming responses
  * - Indoor navigation with route visualization
  * - Voice input/output (Web Speech API, progressive enhancement)
@@ -33,6 +34,20 @@ const QUICK_ACTIONS = [
   { label: "♿ Accessible route", query: "Find me an accessible route to the seating area" },
 ];
 
+const DEMO_ACCOUNTS = [
+  { email: "fan@sentinelarena.com", password: "SentinelFan2026!", role: "Fan", icon: "🎉" },
+  { email: "volunteer@sentinelarena.com", password: "SentinelVol2026!", role: "Volunteer", icon: "🦺" },
+  { email: "admin@sentinelarena.com", password: "SentinelAdmin2026!", role: "Admin", icon: "👑" },
+];
+
+interface AuthUser {
+  user_id: string;
+  email: string;
+  display_name: string;
+  role: string;
+  access_token: string;
+}
+
 interface Message {
   id: string;
   role: "user" | "assistant";
@@ -42,21 +57,212 @@ interface Message {
   timestamp: Date;
 }
 
+// ============================================================
+// Login Screen
+// ============================================================
+function LoginScreen({ onLogin }: { onLogin: (user: AuthUser) => void }) {
+  const [mode, setMode] = useState<"login" | "register">("login");
+  const [email, setEmail] = useState("fan@sentinelarena.com");
+  const [password, setPassword] = useState("SentinelFan2026!");
+  const [displayName, setDisplayName] = useState("");
+  const [error, setError] = useState("");
+  const [isLoading, setIsLoading] = useState(false);
+
+  const handleSubmit = async (e: React.FormEvent) => {
+    e.preventDefault();
+    setError("");
+    setIsLoading(true);
+
+    const endpoint = mode === "login" ? "login" : "register";
+    const body =
+      mode === "login"
+        ? { email, password }
+        : { email, password, display_name: displayName || email.split("@")[0], role: "fan" };
+
+    try {
+      const res = await fetch(`${API_URL}/api/v1/auth/${endpoint}`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify(body),
+      });
+
+      if (res.ok) {
+        const data = await res.json();
+        const user: AuthUser = {
+          user_id: data.user_id,
+          email: data.email,
+          display_name: data.display_name,
+          role: data.role,
+          access_token: data.access_token,
+        };
+        localStorage.setItem("sentinel_fan_user", JSON.stringify(user));
+        onLogin(user);
+      } else {
+        const errData = await res.json().catch(() => ({ detail: "Server error" }));
+        setError(errData.detail || "Authentication failed");
+      }
+    } catch {
+      // Offline demo fallback
+      const demoUser: AuthUser = {
+        user_id: "demo-fan",
+        email,
+        display_name: email.split("@")[0],
+        role: "fan",
+        access_token: "demo-token",
+      };
+      localStorage.setItem("sentinel_fan_user", JSON.stringify(demoUser));
+      onLogin(demoUser);
+    }
+    setIsLoading(false);
+  };
+
+  const selectDemo = (account: typeof DEMO_ACCOUNTS[0]) => {
+    setEmail(account.email);
+    setPassword(account.password);
+    setMode("login");
+    setError("");
+  };
+
+  return (
+    <div className="login-screen" role="main">
+      <div className="login-container">
+        <div className="login-brand">
+          <div className="login-logo" aria-hidden="true">SA</div>
+          <h1 className="login-title">SentinelArena</h1>
+          <p className="login-subtitle">AI Venue Assistant</p>
+        </div>
+
+        <div className="login-card">
+          <div className="login-tabs" role="tablist">
+            <button
+              className={`login-tab ${mode === "login" ? "active" : ""}`}
+              onClick={() => { setMode("login"); setError(""); }}
+              role="tab"
+              aria-selected={mode === "login"}
+            >
+              Sign In
+            </button>
+            <button
+              className={`login-tab ${mode === "register" ? "active" : ""}`}
+              onClick={() => { setMode("register"); setError(""); }}
+              role="tab"
+              aria-selected={mode === "register"}
+            >
+              Register
+            </button>
+          </div>
+
+          <form onSubmit={handleSubmit} aria-label="Login form">
+            {error && (
+              <div className="login-error" role="alert">{error}</div>
+            )}
+
+            <div className="login-field">
+              <label htmlFor="fan-email">Email</label>
+              <input
+                id="fan-email"
+                type="email"
+                value={email}
+                onChange={(e) => setEmail(e.target.value)}
+                required
+                autoComplete="email"
+              />
+            </div>
+
+            <div className="login-field">
+              <label htmlFor="fan-password">Password</label>
+              <input
+                id="fan-password"
+                type="password"
+                value={password}
+                onChange={(e) => setPassword(e.target.value)}
+                required
+                minLength={8}
+                autoComplete={mode === "login" ? "current-password" : "new-password"}
+              />
+            </div>
+
+            {mode === "register" && (
+              <div className="login-field">
+                <label htmlFor="fan-name">Display Name</label>
+                <input
+                  id="fan-name"
+                  type="text"
+                  value={displayName}
+                  onChange={(e) => setDisplayName(e.target.value)}
+                  required
+                  minLength={2}
+                />
+              </div>
+            )}
+
+            <button
+              type="submit"
+              className="login-submit"
+              disabled={isLoading}
+              aria-busy={isLoading}
+            >
+              {isLoading ? "Loading..." : mode === "login" ? "Sign In" : "Create Account"}
+            </button>
+          </form>
+
+          <div className="login-demos">
+            <p className="login-demos-label">Quick Demo Access</p>
+            {DEMO_ACCOUNTS.map((acc) => (
+              <button
+                key={acc.email}
+                className="login-demo-btn"
+                onClick={() => selectDemo(acc)}
+                aria-label={`Login as ${acc.role}`}
+              >
+                <span aria-hidden="true">{acc.icon}</span> {acc.role}
+              </button>
+            ))}
+          </div>
+        </div>
+      </div>
+    </div>
+  );
+}
+
+// ============================================================
+// Main Fan PWA Component
+// ============================================================
 export default function FanPWA() {
-  const [messages, setMessages] = useState<Message[]>([
-    {
-      id: "welcome",
-      role: "assistant",
-      content:
-        "👋 Welcome to SentinelArena! I'm your AI venue assistant.\n\nI can help you with:\n• 🗺️ **Navigation** — Find your way around\n• 👥 **Crowd info** — Check density & wait times\n• 🌐 **Multiple languages** — Select your language above\n• 🎤 **Voice input** — Tap the mic to speak\n\nHow can I help you today?",
-      timestamp: new Date(),
-    },
-  ]);
+  const [user, setUser] = useState<AuthUser | null>(null);
+  const [authChecked, setAuthChecked] = useState(false);
+  const [messages, setMessages] = useState<Message[]>([]);
   const [input, setInput] = useState("");
   const [locale, setLocale] = useState("en");
   const [isLoading, setIsLoading] = useState(false);
   const [isListening, setIsListening] = useState(false);
   const chatEndRef = useRef<HTMLDivElement>(null);
+
+  // ── Restore session ──
+  useEffect(() => {
+    try {
+      const stored = localStorage.getItem("sentinel_fan_user");
+      if (stored) setUser(JSON.parse(stored));
+    } catch {
+      localStorage.removeItem("sentinel_fan_user");
+    }
+    setAuthChecked(true);
+  }, []);
+
+  // ── Initialize welcome message ──
+  useEffect(() => {
+    if (user && messages.length === 0) {
+      setMessages([
+        {
+          id: "welcome",
+          role: "assistant",
+          content:
+            `👋 Welcome, ${user.display_name}! I'm your AI venue assistant.\n\nI can help you with:\n• 🗺️ **Navigation** — Find your way around\n• 👥 **Crowd info** — Check density & wait times\n• 🌐 **Multiple languages** — Select your language above\n• 🎤 **Voice input** — Tap the mic to speak\n\nHow can I help you today?`,
+          timestamp: new Date(),
+        },
+      ]);
+    }
+  }, [user, messages.length]);
 
   // Auto-scroll to bottom
   useEffect(() => {
@@ -79,9 +285,13 @@ export default function FanPWA() {
       setIsLoading(true);
 
       try {
+        const headers: Record<string, string> = { "Content-Type": "application/json" };
+        if (user?.access_token && user.access_token !== "demo-token") {
+          headers["Authorization"] = `Bearer ${user.access_token}`;
+        }
         const res = await fetch(`${API_URL}/api/v1/chat`, {
           method: "POST",
-          headers: { "Content-Type": "application/json" },
+          headers,
           body: JSON.stringify({
             message: text,
             locale,
@@ -108,7 +318,6 @@ export default function FanPWA() {
             );
             utterance.rate = 0.9;
             utterance.lang = locale;
-            // Only speak if user has interacted with voice
             if (isListening) {
               speechSynthesis.speak(utterance);
             }
@@ -134,7 +343,7 @@ export default function FanPWA() {
       }
       setIsLoading(false);
     },
-    [isLoading, locale, isListening]
+    [isLoading, locale, isListening, user]
   );
 
   // ── Voice Input (Web Speech API — Progressive Enhancement) ──
@@ -163,6 +372,30 @@ export default function FanPWA() {
     recognition.start();
   }, [locale, sendMessage]);
 
+  // ── Logout ──
+  const handleLogout = () => {
+    localStorage.removeItem("sentinel_fan_user");
+    setUser(null);
+    setMessages([]);
+  };
+
+  if (!authChecked) {
+    return (
+      <div className="login-screen" role="status">
+        <div className="login-container">
+          <div className="login-brand">
+            <div className="login-logo" aria-hidden="true">SA</div>
+            <p className="login-subtitle">Loading...</p>
+          </div>
+        </div>
+      </div>
+    );
+  }
+
+  if (!user) {
+    return <LoginScreen onLogin={setUser} />;
+  }
+
   return (
     <div className="app-shell">
       {/* ── Header ── */}
@@ -171,18 +404,33 @@ export default function FanPWA() {
           <div className="app-logo-icon" aria-hidden="true">SA</div>
           <span className="app-logo-text">SentinelArena</span>
         </div>
-        <select
-          className="lang-select"
-          value={locale}
-          onChange={(e) => setLocale(e.target.value)}
-          aria-label="Select language"
-        >
-          {Object.entries(LOCALE_LABELS).map(([code, label]) => (
-            <option key={code} value={code}>
-              {label}
-            </option>
-          ))}
-        </select>
+        <div style={{ display: "flex", alignItems: "center", gap: "8px" }}>
+          <select
+            className="lang-select"
+            value={locale}
+            onChange={(e) => setLocale(e.target.value)}
+            aria-label="Select language"
+          >
+            {Object.entries(LOCALE_LABELS).map(([code, label]) => (
+              <option key={code} value={code}>
+                {label}
+              </option>
+            ))}
+          </select>
+          <button
+            className="btn-icon btn-logout"
+            onClick={handleLogout}
+            aria-label="Sign out"
+            title="Sign out"
+            style={{
+              width: "32px", height: "32px", fontSize: "0.8rem",
+              background: "rgba(239,68,68,0.1)", border: "1px solid rgba(239,68,68,0.2)",
+              borderRadius: "8px", cursor: "pointer", color: "#ef4444",
+            }}
+          >
+            ↩
+          </button>
+        </div>
       </header>
 
       {/* ── Chat Area ── */}

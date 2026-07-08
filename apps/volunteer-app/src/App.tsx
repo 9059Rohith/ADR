@@ -1,6 +1,28 @@
-import { useState, useCallback } from "react";
+import { useState, useCallback, useEffect } from "react";
 
-const API_URL = "http://localhost:8000";
+/**
+ * SentinelArena — Volunteer Hub
+ *
+ * Staff incident reporting app with:
+ * - JWT Authentication with demo login
+ * - Incident report submission with AI triage
+ * - Incident list view with severity filtering
+ * - Multi-language support
+ * - Accessible form controls with ARIA
+ *
+ * @accessibility WCAG 2.2 AA — semantic HTML, focus management, ARIA
+ */
+
+const API_URL = (typeof import.meta !== "undefined" && (import.meta as any).env?.VITE_API_URL)
+  || "http://localhost:8000";
+
+interface AuthUser {
+  user_id: string;
+  email: string;
+  display_name: string;
+  role: string;
+  access_token: string;
+}
 
 interface Incident {
   id: string;
@@ -22,7 +44,179 @@ const ZONES = [
   { id: "zone-f", name: "Zone F — East Wing" },
 ];
 
+const DEMO_ACCOUNTS = [
+  { email: "volunteer@sentinelarena.com", password: "SentinelVol2026!", role: "Volunteer", icon: "🦺" },
+  { email: "organizer@sentinelarena.com", password: "SentinelOrg2026!", role: "Organizer", icon: "📋" },
+  { email: "admin@sentinelarena.com", password: "SentinelAdmin2026!", role: "Admin", icon: "👑" },
+];
+
+// ============================================================
+// Login Screen
+// ============================================================
+function LoginScreen({ onLogin }: { onLogin: (user: AuthUser) => void }) {
+  const [mode, setMode] = useState<"login" | "register">("login");
+  const [email, setEmail] = useState("volunteer@sentinelarena.com");
+  const [password, setPassword] = useState("SentinelVol2026!");
+  const [displayName, setDisplayName] = useState("");
+  const [error, setError] = useState("");
+  const [isLoading, setIsLoading] = useState(false);
+
+  const handleSubmit = async (e: React.FormEvent) => {
+    e.preventDefault();
+    setError("");
+    setIsLoading(true);
+
+    const endpoint = mode === "login" ? "login" : "register";
+    const body =
+      mode === "login"
+        ? { email, password }
+        : { email, password, display_name: displayName || email.split("@")[0], role: "volunteer" };
+
+    try {
+      const res = await fetch(`${API_URL}/api/v1/auth/${endpoint}`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify(body),
+      });
+
+      if (res.ok) {
+        const data = await res.json();
+        const user: AuthUser = {
+          user_id: data.user_id,
+          email: data.email,
+          display_name: data.display_name,
+          role: data.role,
+          access_token: data.access_token,
+        };
+        localStorage.setItem("sentinel_vol_user", JSON.stringify(user));
+        onLogin(user);
+      } else {
+        const errData = await res.json().catch(() => ({ detail: "Server error" }));
+        setError(errData.detail || "Authentication failed");
+      }
+    } catch {
+      // Offline demo fallback
+      const demoUser: AuthUser = {
+        user_id: "demo-vol",
+        email,
+        display_name: email.split("@")[0],
+        role: "volunteer",
+        access_token: "demo-token",
+      };
+      localStorage.setItem("sentinel_vol_user", JSON.stringify(demoUser));
+      onLogin(demoUser);
+    }
+    setIsLoading(false);
+  };
+
+  const selectDemo = (account: typeof DEMO_ACCOUNTS[0]) => {
+    setEmail(account.email);
+    setPassword(account.password);
+    setMode("login");
+    setError("");
+  };
+
+  return (
+    <div className="app" style={{ alignItems: "center", justifyContent: "center", padding: "24px 16px" }}>
+      <div style={{ width: "100%", maxWidth: "400px", display: "flex", flexDirection: "column", gap: "24px", alignItems: "center" }}>
+        <div style={{ textAlign: "center" }}>
+          <div style={{
+            width: "56px", height: "56px", borderRadius: "14px",
+            background: "linear-gradient(135deg, var(--accent), var(--purple))",
+            display: "flex", alignItems: "center", justifyContent: "center",
+            fontSize: "1.3rem", fontWeight: 900, color: "white",
+            boxShadow: "0 0 30px rgba(59,130,246,0.3)", margin: "0 auto 12px",
+          }} aria-hidden="true">SA</div>
+          <h1 style={{
+            fontSize: "1.5rem", fontWeight: 800,
+            background: "linear-gradient(135deg, var(--accent), var(--purple))",
+            WebkitBackgroundClip: "text", WebkitTextFillColor: "transparent",
+            marginBottom: "4px",
+          }}>Volunteer Hub</h1>
+          <p style={{ color: "var(--text-sec)", fontSize: "0.85rem" }}>SentinelArena Staff Portal</p>
+        </div>
+
+        <div className="card" style={{ width: "100%" }}>
+          <div className="tab-bar" role="tablist">
+            <button
+              className={`tab ${mode === "login" ? "active" : ""}`}
+              onClick={() => { setMode("login"); setError(""); }}
+              role="tab"
+              aria-selected={mode === "login"}
+            >
+              Sign In
+            </button>
+            <button
+              className={`tab ${mode === "register" ? "active" : ""}`}
+              onClick={() => { setMode("register"); setError(""); }}
+              role="tab"
+              aria-selected={mode === "register"}
+            >
+              Register
+            </button>
+          </div>
+
+          <form onSubmit={handleSubmit} style={{ display: "flex", flexDirection: "column", gap: "12px" }}>
+            {error && (
+              <div role="alert" style={{
+                padding: "10px 14px", background: "rgba(239,68,68,0.1)",
+                border: "1px solid rgba(239,68,68,0.3)", borderRadius: "8px",
+                color: "var(--red)", fontSize: "0.85rem",
+              }}>{error}</div>
+            )}
+
+            <div className="form-group">
+              <label htmlFor="vol-email">Email</label>
+              <input id="vol-email" type="email" value={email} onChange={(e) => setEmail(e.target.value)} required autoComplete="email" />
+            </div>
+            <div className="form-group">
+              <label htmlFor="vol-password">Password</label>
+              <input id="vol-password" type="password" value={password} onChange={(e) => setPassword(e.target.value)} required minLength={8} autoComplete={mode === "login" ? "current-password" : "new-password"} />
+            </div>
+
+            {mode === "register" && (
+              <div className="form-group">
+                <label htmlFor="vol-name">Display Name</label>
+                <input id="vol-name" type="text" value={displayName} onChange={(e) => setDisplayName(e.target.value)} required minLength={2} />
+              </div>
+            )}
+
+            <button type="submit" className="btn btn-primary" disabled={isLoading} aria-busy={isLoading}>
+              {isLoading ? "Loading..." : mode === "login" ? "Sign In" : "Create Account"}
+            </button>
+          </form>
+
+          <div style={{ marginTop: "16px", paddingTop: "12px", borderTop: "1px solid var(--border)", display: "flex", flexDirection: "column", gap: "8px" }}>
+            <p style={{ fontSize: "0.7rem", fontWeight: 600, textTransform: "uppercase", letterSpacing: "0.08em", color: "var(--text-sec)", textAlign: "center" }}>Quick Demo Access</p>
+            {DEMO_ACCOUNTS.map((acc) => (
+              <button
+                key={acc.email}
+                onClick={() => selectDemo(acc)}
+                style={{
+                  width: "100%", padding: "8px", background: "rgba(255,255,255,0.03)",
+                  border: "1px solid var(--border)", borderRadius: "8px", cursor: "pointer",
+                  fontFamily: "var(--font)", fontSize: "0.8rem", color: "var(--text-sec)",
+                  display: "flex", alignItems: "center", gap: "8px", justifyContent: "center",
+                  transition: "all 0.2s",
+                }}
+                aria-label={`Login as ${acc.role}`}
+              >
+                <span aria-hidden="true">{acc.icon}</span> {acc.role}
+              </button>
+            ))}
+          </div>
+        </div>
+      </div>
+    </div>
+  );
+}
+
+// ============================================================
+// Main Volunteer App
+// ============================================================
 export default function App() {
+  const [user, setUser] = useState<AuthUser | null>(null);
+  const [authChecked, setAuthChecked] = useState(false);
   const [tab, setTab] = useState<"report" | "list">("report");
   const [title, setTitle] = useState("");
   const [description, setDescription] = useState("");
@@ -33,14 +227,36 @@ export default function App() {
   const [submitted, setSubmitted] = useState<Incident | null>(null);
   const [incidents, setIncidents] = useState<Incident[]>([]);
 
+  // ── Restore session ──
+  useEffect(() => {
+    try {
+      const stored = localStorage.getItem("sentinel_vol_user");
+      if (stored) setUser(JSON.parse(stored));
+    } catch {
+      localStorage.removeItem("sentinel_vol_user");
+    }
+    setAuthChecked(true);
+  }, []);
+
+  const getAuthHeaders = useCallback((): Record<string, string> => {
+    const headers: Record<string, string> = { "Content-Type": "application/json" };
+    if (user?.access_token && user.access_token !== "demo-token") {
+      headers["Authorization"] = `Bearer ${user.access_token}`;
+    }
+    return headers;
+  }, [user]);
+
   const submitIncident = useCallback(async () => {
     if (!title.trim() || !description.trim() || description.length < 10) return;
     setIsSubmitting(true);
     try {
       const res = await fetch(`${API_URL}/api/v1/incidents`, {
         method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ title, description, severity, zone_id: zoneId, locale }),
+        headers: getAuthHeaders(),
+        body: JSON.stringify({
+          title, description, severity, zone_id: zoneId, locale,
+          reporter_id: user?.user_id || "volunteer-1",
+        }),
       });
       if (res.ok) {
         const data = await res.json();
@@ -63,11 +279,13 @@ export default function App() {
       setDescription("");
     }
     setIsSubmitting(false);
-  }, [title, description, severity, zoneId, locale]);
+  }, [title, description, severity, zoneId, locale, user, getAuthHeaders]);
 
   const fetchIncidents = useCallback(async () => {
     try {
-      const res = await fetch(`${API_URL}/api/v1/incidents`);
+      const res = await fetch(`${API_URL}/api/v1/incidents`, {
+        headers: getAuthHeaders(),
+      });
       if (res.ok) {
         const data = await res.json();
         setIncidents(data.incidents || []);
@@ -75,28 +293,62 @@ export default function App() {
     } catch {
       setIncidents([]);
     }
-  }, []);
+  }, [getAuthHeaders]);
+
+  const handleLogout = () => {
+    localStorage.removeItem("sentinel_vol_user");
+    setUser(null);
+    setIncidents([]);
+    setSubmitted(null);
+  };
+
+  if (!authChecked) {
+    return (
+      <div className="app" style={{ alignItems: "center", justifyContent: "center" }}>
+        <p style={{ color: "var(--text-sec)" }}>Loading...</p>
+      </div>
+    );
+  }
+
+  if (!user) {
+    return <LoginScreen onLogin={setUser} />;
+  }
 
   return (
     <div className="app">
       <header className="header" role="banner">
         <h1>🦺 Volunteer Hub</h1>
-        <select
-          value={locale}
-          onChange={(e) => setLocale(e.target.value)}
-          aria-label="Select language"
-          style={{
-            padding: "4px 8px", background: "rgba(255,255,255,0.05)",
-            border: "1px solid rgba(255,255,255,0.1)", borderRadius: "6px",
-            color: "#f1f5f9", fontFamily: "Inter", fontSize: "0.8rem",
-          }}
-        >
-          <option value="en">English</option>
-          <option value="hi">हिन्दी</option>
-          <option value="ta">தமிழ்</option>
-          <option value="te">తెలుగు</option>
-          <option value="es">Español</option>
-        </select>
+        <div style={{ display: "flex", alignItems: "center", gap: "8px" }}>
+          <select
+            value={locale}
+            onChange={(e) => setLocale(e.target.value)}
+            aria-label="Select language"
+            style={{
+              padding: "4px 8px", background: "rgba(255,255,255,0.05)",
+              border: "1px solid rgba(255,255,255,0.1)", borderRadius: "6px",
+              color: "#f1f5f9", fontFamily: "Inter", fontSize: "0.8rem",
+            }}
+          >
+            <option value="en">English</option>
+            <option value="hi">हिन्दी</option>
+            <option value="ta">தமிழ்</option>
+            <option value="te">తెలుగు</option>
+            <option value="es">Español</option>
+          </select>
+          <button
+            onClick={handleLogout}
+            aria-label="Sign out"
+            title="Sign out"
+            style={{
+              padding: "4px 8px", background: "rgba(239,68,68,0.1)",
+              border: "1px solid rgba(239,68,68,0.2)", borderRadius: "6px",
+              color: "#ef4444", fontFamily: "Inter", fontSize: "0.75rem",
+              cursor: "pointer", fontWeight: 600,
+            }}
+          >
+            ↩ Out
+          </button>
+        </div>
       </header>
 
       <main className="content" role="main">

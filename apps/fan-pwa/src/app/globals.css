@@ -267,3 +267,205 @@ body {
 .route-info strong {
   color: var(--text-primary);
 }
+
+/* ── Login Screen ── */
+.login-screen {
+  min-height: 100dvh;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  padding: 24px 16px;
+  background: var(--bg-primary);
+}
+
+.login-container {
+  width: 100%;
+  max-width: 400px;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 24px;
+}
+
+.login-brand {
+  text-align: center;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 12px;
+}
+
+.login-logo {
+  width: 56px;
+  height: 56px;
+  border-radius: 14px;
+  background: linear-gradient(135deg, var(--accent), var(--accent-purple));
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  font-size: 1.3rem;
+  font-weight: 900;
+  color: white;
+  box-shadow: 0 0 30px rgba(59, 130, 246, 0.3);
+}
+
+.login-title {
+  font-size: 1.5rem;
+  font-weight: 800;
+  background: linear-gradient(135deg, var(--accent), var(--accent-purple));
+  -webkit-background-clip: text;
+  -webkit-text-fill-color: transparent;
+}
+
+.login-subtitle {
+  color: var(--text-secondary);
+  font-size: 0.85rem;
+}
+
+.login-card {
+  width: 100%;
+  background: var(--bg-card);
+  border: 1px solid var(--border);
+  border-radius: var(--radius);
+  padding: 24px;
+  backdrop-filter: blur(20px);
+}
+
+.login-tabs {
+  display: flex;
+  gap: 4px;
+  padding: 4px;
+  background: rgba(255, 255, 255, 0.03);
+  border-radius: var(--radius-sm);
+  margin-bottom: 20px;
+}
+
+.login-tab {
+  flex: 1;
+  padding: 8px;
+  border-radius: 8px;
+  border: none;
+  cursor: pointer;
+  font-family: var(--font);
+  font-size: 0.85rem;
+  font-weight: 600;
+  color: var(--text-muted);
+  background: transparent;
+  transition: all 0.2s;
+}
+
+.login-tab.active {
+  background: rgba(59, 130, 246, 0.15);
+  color: var(--accent);
+}
+
+.login-card form {
+  display: flex;
+  flex-direction: column;
+  gap: 14px;
+}
+
+.login-error {
+  padding: 10px 14px;
+  background: rgba(239, 68, 68, 0.1);
+  border: 1px solid rgba(239, 68, 68, 0.3);
+  border-radius: var(--radius-sm);
+  color: var(--red);
+  font-size: 0.85rem;
+}
+
+.login-field {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+}
+
+.login-field label {
+  font-size: 0.8rem;
+  font-weight: 500;
+  color: var(--text-secondary);
+}
+
+.login-field input {
+  padding: 12px 14px;
+  background: var(--bg-glass);
+  border: 1px solid var(--border);
+  border-radius: var(--radius-sm);
+  color: var(--text-primary);
+  font-family: var(--font);
+  font-size: 0.9rem;
+  transition: border-color 0.2s;
+}
+
+.login-field input:focus {
+  border-color: var(--accent);
+  outline: none;
+}
+
+.login-submit {
+  width: 100%;
+  padding: 14px;
+  background: linear-gradient(135deg, var(--accent), var(--accent-purple));
+  color: white;
+  border: none;
+  border-radius: var(--radius-sm);
+  font-family: var(--font);
+  font-size: 0.95rem;
+  font-weight: 700;
+  cursor: pointer;
+  transition: all 0.2s;
+  margin-top: 4px;
+}
+
+.login-submit:hover {
+  transform: translateY(-1px);
+  box-shadow: 0 0 20px rgba(59, 130, 246, 0.25);
+}
+
+.login-submit:disabled {
+  opacity: 0.6;
+  cursor: wait;
+}
+
+.login-demos {
+  margin-top: 20px;
+  padding-top: 16px;
+  border-top: 1px solid var(--border);
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+}
+
+.login-demos-label {
+  font-size: 0.7rem;
+  font-weight: 600;
+  text-transform: uppercase;
+  letter-spacing: 0.08em;
+  color: var(--text-muted);
+  text-align: center;
+}
+
+.login-demo-btn {
+  width: 100%;
+  padding: 10px;
+  background: var(--bg-glass);
+  border: 1px solid var(--border);
+  border-radius: var(--radius-sm);
+  cursor: pointer;
+  font-family: var(--font);
+  font-size: 0.85rem;
+  font-weight: 500;
+  color: var(--text-secondary);
+  transition: all 0.2s;
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  justify-content: center;
+}
+
+.login-demo-btn:hover {
+  background: rgba(59, 130, 246, 0.08);
+  border-color: var(--accent);
+  color: var(--accent);
+}
+

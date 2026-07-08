@@ -6,11 +6,14 @@ import { useState, useEffect, useCallback } from "react";
  * SentinelArena — Organizer Control Room Dashboard
  *
  * Features:
+ * - JWT Authentication with demo login (pre-filled credentials)
  * - Live venue heatmap with zone-colored density overlays
  * - Crowd advisory feed with ARIA live regions
  * - Decision Copilot panel with approve/reject actions
  * - Incident management overview
- * - Real-time WebSocket updates
+ * - Real-time polling updates
+ *
+ * @accessibility WCAG 2.2 AA — keyboard nav, ARIA live regions, focus management
  */
 
 // ── Types ──
@@ -35,12 +38,13 @@ interface Decision {
   created_at: string;
 }
 
-interface Advisory {
-  id: string;
-  zone_name: string;
-  severity: string;
-  message: string;
-  time: string;
+interface AuthUser {
+  user_id: string;
+  email: string;
+  display_name: string;
+  role: string;
+  access_token: string;
+  refresh_token: string;
 }
 
 // ── Zone Layout for Heatmap ──
@@ -71,6 +75,14 @@ const SEVERITY_COLORS: Record<string, string> = {
 
 const API_URL = process.env.NEXT_PUBLIC_API_URL || "http://localhost:8000";
 
+// ── Demo Credentials (pre-seeded in MongoDB Atlas) ──
+const DEMO_ACCOUNTS = [
+  { email: "admin@sentinelarena.com", password: "SentinelAdmin2026!", role: "Admin", icon: "👑" },
+  { email: "organizer@sentinelarena.com", password: "SentinelOrg2026!", role: "Organizer", icon: "📋" },
+  { email: "volunteer@sentinelarena.com", password: "SentinelVol2026!", role: "Volunteer", icon: "🦺" },
+  { email: "fan@sentinelarena.com", password: "SentinelFan2026!", role: "Fan", icon: "🎉" },
+];
+
 // ── Navigation Items ──
 const NAV_ITEMS = [
   { id: "overview", label: "Overview", icon: "📊" },
@@ -80,19 +92,265 @@ const NAV_ITEMS = [
   { id: "advisories", label: "Advisories", icon: "📢" },
 ];
 
+// ============================================================
+// Login / Register Component
+// ============================================================
+function AuthScreen({ onLogin }: { onLogin: (user: AuthUser) => void }) {
+  const [mode, setMode] = useState<"login" | "register">("login");
+  const [email, setEmail] = useState("admin@sentinelarena.com");
+  const [password, setPassword] = useState("SentinelAdmin2026!");
+  const [displayName, setDisplayName] = useState("");
+  const [role, setRole] = useState("fan");
+  const [error, setError] = useState("");
+  const [isLoading, setIsLoading] = useState(false);
+  const [showPassword, setShowPassword] = useState(false);
+
+  const handleSubmit = async (e: React.FormEvent) => {
+    e.preventDefault();
+    setError("");
+    setIsLoading(true);
+
+    const endpoint = mode === "login" ? "login" : "register";
+    const body =
+      mode === "login"
+        ? { email, password }
+        : { email, password, display_name: displayName || email.split("@")[0], role };
+
+    try {
+      const res = await fetch(`${API_URL}/api/v1/auth/${endpoint}`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify(body),
+      });
+
+      if (res.ok) {
+        const data = await res.json();
+        const user: AuthUser = {
+          user_id: data.user_id,
+          email: data.email,
+          display_name: data.display_name,
+          role: data.role,
+          access_token: data.access_token,
+          refresh_token: data.refresh_token,
+        };
+        localStorage.setItem("sentinel_user", JSON.stringify(user));
+        onLogin(user);
+      } else {
+        const errData = await res.json().catch(() => ({ detail: "Server error" }));
+        setError(errData.detail || `${mode === "login" ? "Login" : "Registration"} failed`);
+      }
+    } catch {
+      // Offline demo fallback — allow instant demo access
+      const demoUser: AuthUser = {
+        user_id: "demo-user",
+        email,
+        display_name: email.split("@")[0],
+        role: "admin",
+        access_token: "demo-token",
+        refresh_token: "demo-refresh",
+      };
+      localStorage.setItem("sentinel_user", JSON.stringify(demoUser));
+      onLogin(demoUser);
+    }
+    setIsLoading(false);
+  };
+
+  const selectDemoAccount = (account: typeof DEMO_ACCOUNTS[0]) => {
+    setEmail(account.email);
+    setPassword(account.password);
+    setMode("login");
+    setError("");
+  };
+
+  return (
+    <div className="auth-screen" role="main">
+      <div className="auth-container">
+        {/* Logo & Branding */}
+        <div className="auth-brand">
+          <div className="auth-logo" aria-hidden="true">SA</div>
+          <h1 className="auth-title">SentinelArena</h1>
+          <p className="auth-subtitle">
+            GenAI-Powered Smart Stadium Operations
+          </p>
+        </div>
+
+        {/* Auth Form */}
+        <div className="auth-card">
+          <div className="auth-tabs" role="tablist" aria-label="Authentication mode">
+            <button
+              className={`auth-tab ${mode === "login" ? "active" : ""}`}
+              onClick={() => { setMode("login"); setError(""); }}
+              role="tab"
+              aria-selected={mode === "login"}
+              id="tab-login"
+            >
+              Sign In
+            </button>
+            <button
+              className={`auth-tab ${mode === "register" ? "active" : ""}`}
+              onClick={() => { setMode("register"); setError(""); }}
+              role="tab"
+              aria-selected={mode === "register"}
+              id="tab-register"
+            >
+              Register
+            </button>
+          </div>
+
+          <form onSubmit={handleSubmit} className="auth-form" aria-label="Authentication form">
+            {error && (
+              <div className="auth-error" role="alert" aria-live="assertive">
+                <span aria-hidden="true">⚠</span> {error}
+              </div>
+            )}
+
+            <div className="form-field">
+              <label htmlFor="auth-email">Email Address</label>
+              <input
+                id="auth-email"
+                type="email"
+                value={email}
+                onChange={(e) => setEmail(e.target.value)}
+                placeholder="you@example.com"
+                required
+                autoComplete="email"
+                aria-required="true"
+              />
+            </div>
+
+            <div className="form-field">
+              <label htmlFor="auth-password">Password</label>
+              <div className="password-wrapper">
+                <input
+                  id="auth-password"
+                  type={showPassword ? "text" : "password"}
+                  value={password}
+                  onChange={(e) => setPassword(e.target.value)}
+                  placeholder="Enter your password"
+                  required
+                  minLength={8}
+                  autoComplete={mode === "login" ? "current-password" : "new-password"}
+                  aria-required="true"
+                />
+                <button
+                  type="button"
+                  className="password-toggle"
+                  onClick={() => setShowPassword(!showPassword)}
+                  aria-label={showPassword ? "Hide password" : "Show password"}
+                  tabIndex={0}
+                >
+                  {showPassword ? "🙈" : "👁"}
+                </button>
+              </div>
+            </div>
+
+            {mode === "register" && (
+              <>
+                <div className="form-field">
+                  <label htmlFor="auth-name">Display Name</label>
+                  <input
+                    id="auth-name"
+                    type="text"
+                    value={displayName}
+                    onChange={(e) => setDisplayName(e.target.value)}
+                    placeholder="Your name"
+                    required
+                    minLength={2}
+                    aria-required="true"
+                  />
+                </div>
+                <div className="form-field">
+                  <label htmlFor="auth-role">Role</label>
+                  <select
+                    id="auth-role"
+                    value={role}
+                    onChange={(e) => setRole(e.target.value)}
+                    aria-label="Select your role"
+                  >
+                    <option value="fan">Fan</option>
+                    <option value="volunteer">Volunteer</option>
+                    <option value="organizer">Organizer</option>
+                  </select>
+                </div>
+              </>
+            )}
+
+            <button
+              type="submit"
+              className="btn btn-primary auth-submit"
+              disabled={isLoading}
+              aria-busy={isLoading}
+            >
+              {isLoading
+                ? "Authenticating..."
+                : mode === "login"
+                ? "Sign In"
+                : "Create Account"}
+            </button>
+          </form>
+
+          {/* Demo Quick Access */}
+          <div className="demo-section">
+            <p className="demo-label">Quick Demo Access</p>
+            <div className="demo-accounts" role="group" aria-label="Demo account quick login buttons">
+              {DEMO_ACCOUNTS.map((account) => (
+                <button
+                  key={account.email}
+                  className="demo-btn"
+                  onClick={() => selectDemoAccount(account)}
+                  aria-label={`Login as ${account.role}: ${account.email}`}
+                >
+                  <span className="demo-icon" aria-hidden="true">{account.icon}</span>
+                  <span className="demo-role">{account.role}</span>
+                  <span className="demo-email">{account.email}</span>
+                </button>
+              ))}
+            </div>
+          </div>
+        </div>
+
+        <p className="auth-footer">
+          Secured with Argon2id + JWT · OWASP ASVS L2 · MongoDB Atlas
+        </p>
+      </div>
+    </div>
+  );
+}
+
+// ============================================================
+// Main Dashboard Component
+// ============================================================
 export default function DashboardPage() {
+  const [user, setUser] = useState<AuthUser | null>(null);
+  const [authChecked, setAuthChecked] = useState(false);
   const [activeView, setActiveView] = useState("overview");
   const [zones, setZones] = useState<ZoneDensity[]>([]);
   const [decisions, setDecisions] = useState<Decision[]>([]);
-  const [advisories, setAdvisories] = useState<Advisory[]>([]);
   const [isLive, setIsLive] = useState(false);
   const [decisionQuery, setDecisionQuery] = useState("");
   const [isLoading, setIsLoading] = useState(false);
 
+  // ── Restore session from localStorage ──
+  useEffect(() => {
+    try {
+      const stored = localStorage.getItem("sentinel_user");
+      if (stored) {
+        setUser(JSON.parse(stored));
+      }
+    } catch {
+      localStorage.removeItem("sentinel_user");
+    }
+    setAuthChecked(true);
+  }, []);
+
   // ── Fetch crowd data ──
   const fetchCrowdData = useCallback(async () => {
     try {
-      const res = await fetch(`${API_URL}/api/v1/crowd`);
+      const headers: Record<string, string> = {};
+      if (user?.access_token && user.access_token !== "demo-token") {
+        headers["Authorization"] = `Bearer ${user.access_token}`;
+      }
+      const res = await fetch(`${API_URL}/api/v1/crowd`, { headers });
       if (res.ok) {
         const data = await res.json();
         setZones(data.zones || []);
@@ -103,18 +361,19 @@ export default function DashboardPage() {
       setZones(generateDemoZones());
       setIsLive(false);
     }
-  }, []);
+  }, [user]);
 
   // Poll for updates
   useEffect(() => {
+    if (!user) return;
     fetchCrowdData();
     const interval = setInterval(fetchCrowdData, 5000);
     return () => clearInterval(interval);
-  }, [fetchCrowdData]);
+  }, [fetchCrowdData, user]);
 
   // ── Generate demo zones for offline mode ──
   function generateDemoZones(): ZoneDensity[] {
-    const demoZones: ZoneDensity[] = [
+    return [
       { zone_id: "zone-a", zone_name: "Zone A — Main Lobby", current_density_pct: 62, ewma_density_pct: 60, trend_direction: "rising", trend_rate_pct_per_min: 1.2, severity: "normal", projected_time_to_threshold_min: 11, current_count: 310, capacity: 500 },
       { zone_id: "zone-b", zone_name: "Zone B — North Concourse", current_density_pct: 45, ewma_density_pct: 43, trend_direction: "stable", trend_rate_pct_per_min: 0.3, severity: "normal", projected_time_to_threshold_min: null, current_count: 180, capacity: 400 },
       { zone_id: "zone-c", zone_name: "Zone C — North Stand", current_density_pct: 82, ewma_density_pct: 79, trend_direction: "rising", trend_rate_pct_per_min: 2.1, severity: "warning", projected_time_to_threshold_min: 6, current_count: 1640, capacity: 2000 },
@@ -125,7 +384,6 @@ export default function DashboardPage() {
       { zone_id: "zone-h", zone_name: "Zone H — South Gates", current_density_pct: 42, ewma_density_pct: 44, trend_direction: "falling", trend_rate_pct_per_min: -1.1, severity: "normal", projected_time_to_threshold_min: null, current_count: 126, capacity: 300 },
       { zone_id: "zone-i", zone_name: "Zone I — VIP Area", current_density_pct: 25, ewma_density_pct: 23, trend_direction: "stable", trend_rate_pct_per_min: 0.1, severity: "normal", projected_time_to_threshold_min: null, current_count: 50, capacity: 200 },
     ];
-    return demoZones;
   }
 
   // ── Request decision support ──
@@ -133,9 +391,13 @@ export default function DashboardPage() {
     if (!decisionQuery.trim()) return;
     setIsLoading(true);
     try {
+      const headers: Record<string, string> = { "Content-Type": "application/json" };
+      if (user?.access_token && user.access_token !== "demo-token") {
+        headers["Authorization"] = `Bearer ${user.access_token}`;
+      }
       const res = await fetch(`${API_URL}/api/v1/decisions`, {
         method: "POST",
-        headers: { "Content-Type": "application/json" },
+        headers,
         body: JSON.stringify({ query: decisionQuery }),
       });
       if (res.ok) {
@@ -164,13 +426,17 @@ export default function DashboardPage() {
   // ── Handle decision action ──
   async function handleDecisionAction(decisionId: string, action: string) {
     try {
+      const headers: Record<string, string> = { "Content-Type": "application/json" };
+      if (user?.access_token && user.access_token !== "demo-token") {
+        headers["Authorization"] = `Bearer ${user.access_token}`;
+      }
       await fetch(`${API_URL}/api/v1/decisions/${decisionId}/action`, {
         method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ action, actor_id: "organizer-1" }),
+        headers,
+        body: JSON.stringify({ action, actor_id: user?.user_id || "organizer-1" }),
       });
     } catch {
-      // Offline mode
+      // Offline mode — still update UI
     }
     setDecisions((prev) =>
       prev.map((d) =>
@@ -179,6 +445,34 @@ export default function DashboardPage() {
           : d
       )
     );
+  }
+
+  // ── Logout ──
+  function handleLogout() {
+    localStorage.removeItem("sentinel_user");
+    setUser(null);
+    setZones([]);
+    setDecisions([]);
+  }
+
+  // ── Loading state ──
+  if (!authChecked) {
+    return (
+      <div className="auth-screen" role="status" aria-label="Loading application">
+        <div className="auth-container">
+          <div className="auth-brand">
+            <div className="auth-logo loading-pulse" aria-hidden="true">SA</div>
+            <h1 className="auth-title">SentinelArena</h1>
+            <p className="auth-subtitle">Loading...</p>
+          </div>
+        </div>
+      </div>
+    );
+  }
+
+  // ── Show login if not authenticated ──
+  if (!user) {
+    return <AuthScreen onLogin={setUser} />;
   }
 
   // ── Computed stats ──
@@ -217,8 +511,25 @@ export default function DashboardPage() {
           ))}
         </ul>
 
+        {/* User Profile & Logout */}
         <div style={{ marginTop: "auto", paddingTop: "var(--space-lg)" }}>
-          <div className="live-indicator">
+          <div className="user-profile">
+            <div className="user-avatar" aria-hidden="true">
+              {user.display_name.charAt(0).toUpperCase()}
+            </div>
+            <div className="user-info">
+              <span className="user-name">{user.display_name}</span>
+              <span className="user-role">{user.role}</span>
+            </div>
+          </div>
+          <button
+            className="btn btn-secondary logout-btn"
+            onClick={handleLogout}
+            aria-label="Sign out of the dashboard"
+          >
+            ↩ Sign Out
+          </button>
+          <div className="live-indicator" style={{ marginTop: "var(--space-sm)" }}>
             <span className="live-dot" aria-hidden="true" />
             {isLive ? "Live Data" : "Demo Mode"}
           </div>
@@ -512,7 +823,7 @@ export default function DashboardPage() {
             {zones
               .filter((z) => z.severity !== "normal" || z.trend_direction === "rising")
               .sort((a, b) => {
-                const order = { emergency: 0, critical: 1, warning: 2, normal: 3 };
+                const order: Record<string, number> = { emergency: 0, critical: 1, warning: 2, normal: 3 };
                 return (order[a.severity] ?? 3) - (order[b.severity] ?? 3);
               })
               .map((z) => (
