@@ -143,8 +143,8 @@ function AuthScreen({ onLogin }: { onLogin: (user: AuthUser) => void }) {
       // Offline demo fallback — allow instant demo access
       const demoUser: AuthUser = {
         user_id: "demo-user",
-        email,
-        display_name: email.split("@")[0],
+        email: email || "",
+        display_name: (email || "demo").split("@")[0],
         role: "admin",
         access_token: "demo-token",
         refresh_token: "demo-refresh",
