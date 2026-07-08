@@ -77,7 +77,7 @@ function LoginScreen({ onLogin }: { onLogin: (user: AuthUser) => void }) {
     const body =
       mode === "login"
         ? { email, password }
-        : { email, password, display_name: displayName || email.split("@")[0], role: "fan" };
+        : { email, password, display_name: displayName || email?.split("@")[0] || "fan", role: "fan" };
 
     try {
       const res = await fetch(`${API_URL}/api/v1/auth/${endpoint}`, {
@@ -106,7 +106,7 @@ function LoginScreen({ onLogin }: { onLogin: (user: AuthUser) => void }) {
       const demoUser: AuthUser = {
         user_id: "demo-fan",
         email: email || "",
-        display_name: (email || "demo").split("@")[0],
+        display_name: (email ?? "demo").split("@")[0] ?? "fan",
         role: "fan",
         access_token: "demo-token",
       };
