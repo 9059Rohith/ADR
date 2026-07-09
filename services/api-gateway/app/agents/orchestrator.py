@@ -13,14 +13,14 @@ Architecture follows ADR-001 (LangGraph over raw function calling).
 from __future__ import annotations
 
 import json
-from dataclasses import dataclass, field
-from typing import Any, TypedDict
+from typing import TYPE_CHECKING, Any, TypedDict
 
 from app.adapters import create_llm_provider
-from app.core.density_evaluator import DensityEvaluator, SeverityLevel
-from app.core.pathfinding import PathConstraints, RouteResult, VenueGraph
-from app.ports.llm_provider import LLMMessage, LLMProvider
+from app.core.pathfinding import PathConstraints, VenueGraph
+from app.ports.llm_provider import LLMMessage
 
+if TYPE_CHECKING:
+    from app.core.density_evaluator import DensityEvaluator
 
 # ============================================================
 # Agent State
@@ -184,9 +184,7 @@ class AgentOrchestrator:
 
         # Step 3: Translate if needed
         if locale != "en" and result.get("response"):
-            result["response"] = await self._translate(
-                result["response"], locale
-            )
+            result["response"] = await self._translate(result["response"], locale)
 
         result["intent"] = intent
         result["locale"] = locale
@@ -301,9 +299,7 @@ class AgentOrchestrator:
             "sources": ["[Navigation Agent]", "[Pathfinding Tool]"],
         }
 
-    async def _handle_crowd(
-        self, message: str, locale: str
-    ) -> dict[str, Any]:
+    async def _handle_crowd(self, message: str, locale: str) -> dict[str, Any]:
         """Handle crowd queries via the Crowd Agent.
 
         Flow: Get density data → LLM risk assessment
@@ -334,9 +330,7 @@ class AgentOrchestrator:
             "sources": ["[Crowd Agent]", "[Density Evaluator]"],
         }
 
-    async def _handle_decision(
-        self, message: str, locale: str
-    ) -> dict[str, Any]:
+    async def _handle_decision(self, message: str, locale: str) -> dict[str, Any]:
         """Handle decision support queries via the Decision Agent.
 
         Uses the reasoning model for complex multi-source synthesis.
@@ -381,9 +375,7 @@ class AgentOrchestrator:
             ],
         }
 
-    async def _handle_general(
-        self, message: str, locale: str
-    ) -> dict[str, Any]:
+    async def _handle_general(self, message: str, locale: str) -> dict[str, Any]:
         """Handle general queries with a helpful response."""
         response = await self._fast_llm.generate(
             [LLMMessage(role="user", content=message)],

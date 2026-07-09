@@ -8,13 +8,14 @@ and graceful fallback when MongoDB is not available.
 from __future__ import annotations
 
 import logging
-from collections.abc import AsyncGenerator
-from typing import Any
+from typing import TYPE_CHECKING, Any
 
 from motor.motor_asyncio import AsyncIOMotorClient, AsyncIOMotorDatabase
-from pymongo.errors import ConnectionFailure, ServerSelectionTimeoutError
 
 from app.config import get_settings
+
+if TYPE_CHECKING:
+    from collections.abc import AsyncGenerator
 
 logger = logging.getLogger(__name__)
 
@@ -103,4 +104,3 @@ async def close_db() -> None:
         _client.close()
         _client = None
         logger.info("MongoDB connection pool closed")
-

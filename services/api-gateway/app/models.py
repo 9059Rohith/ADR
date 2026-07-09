@@ -9,19 +9,18 @@ from __future__ import annotations
 import enum
 import hashlib
 import json
-from datetime import datetime, timezone
+from datetime import UTC, datetime
 from typing import Any
 from uuid import uuid4
 
 from pydantic import BaseModel, ConfigDict, Field
-
 
 # ============================================================
 # Enums
 # ============================================================
 
 
-class UserRole(str, enum.Enum):
+class UserRole(enum.StrEnum):
     """User roles for RBAC."""
 
     FAN = "fan"
@@ -30,7 +29,7 @@ class UserRole(str, enum.Enum):
     ADMIN = "admin"
 
 
-class Locale(str, enum.Enum):
+class Locale(enum.StrEnum):
     """Supported locales for multi-language support."""
 
     EN = "en"
@@ -40,7 +39,7 @@ class Locale(str, enum.Enum):
     ES = "es"
 
 
-class ZoneSeverity(str, enum.Enum):
+class ZoneSeverity(enum.StrEnum):
     """Crowd density severity levels."""
 
     NORMAL = "normal"
@@ -49,7 +48,7 @@ class ZoneSeverity(str, enum.Enum):
     EMERGENCY = "emergency"
 
 
-class IncidentStatus(str, enum.Enum):
+class IncidentStatus(enum.StrEnum):
     """Incident lifecycle status."""
 
     REPORTED = "reported"
@@ -59,7 +58,7 @@ class IncidentStatus(str, enum.Enum):
     CLOSED = "closed"
 
 
-class IncidentSeverity(str, enum.Enum):
+class IncidentSeverity(enum.StrEnum):
     """Incident severity levels."""
 
     LOW = "low"
@@ -68,7 +67,7 @@ class IncidentSeverity(str, enum.Enum):
     CRITICAL = "critical"
 
 
-class DecisionStatus(str, enum.Enum):
+class DecisionStatus(enum.StrEnum):
     """Decision approval status."""
 
     PENDING = "pending"
@@ -77,7 +76,7 @@ class DecisionStatus(str, enum.Enum):
     EDITED = "edited"
 
 
-class EdgeAccessibility(str, enum.Enum):
+class EdgeAccessibility(enum.StrEnum):
     """Edge accessibility type."""
 
     WALKWAY = "walkway"
@@ -117,8 +116,8 @@ class User(MongoDoc):
     role: UserRole = UserRole.FAN
     locale: Locale = Locale.EN
     is_active: bool = True
-    created_at: datetime = Field(default_factory=lambda: datetime.now(timezone.utc))
-    updated_at: datetime = Field(default_factory=lambda: datetime.now(timezone.utc))
+    created_at: datetime = Field(default_factory=lambda: datetime.now(UTC))
+    updated_at: datetime = Field(default_factory=lambda: datetime.now(UTC))
 
 
 # ============================================================
@@ -136,7 +135,7 @@ class Venue(MongoDoc):
     total_capacity: int = 10000
     map_svg_url: str | None = None
     metadata_json: dict[str, Any] | None = None
-    created_at: datetime = Field(default_factory=lambda: datetime.now(timezone.utc))
+    created_at: datetime = Field(default_factory=lambda: datetime.now(UTC))
 
 
 class Zone(MongoDoc):
@@ -202,8 +201,8 @@ class Incident(MongoDoc):
     ai_triage_summary: str | None = None
     ai_suggested_actions: list[str] | dict[str, Any] | None = None
     photo_url: str | None = None
-    created_at: datetime = Field(default_factory=lambda: datetime.now(timezone.utc))
-    updated_at: datetime = Field(default_factory=lambda: datetime.now(timezone.utc))
+    created_at: datetime = Field(default_factory=lambda: datetime.now(UTC))
+    updated_at: datetime = Field(default_factory=lambda: datetime.now(UTC))
 
 
 # ============================================================
@@ -225,7 +224,7 @@ class SOPDocument(MongoDoc):
     content: str
     embedding: list[float] | None = None
     metadata_json: dict[str, Any] | None = None
-    created_at: datetime = Field(default_factory=lambda: datetime.now(timezone.utc))
+    created_at: datetime = Field(default_factory=lambda: datetime.now(UTC))
 
 
 # ============================================================
@@ -240,7 +239,7 @@ class CrowdReading(MongoDoc):
     zone_id: str
     count: int
     density_pct: float
-    timestamp: datetime = Field(default_factory=lambda: datetime.now(timezone.utc))
+    timestamp: datetime = Field(default_factory=lambda: datetime.now(UTC))
 
 
 # ============================================================
@@ -264,7 +263,7 @@ class AuditLog(MongoDoc):
     payload_hash: str
     decision_status: DecisionStatus | None = None
     ip_address: str | None = None
-    created_at: datetime = Field(default_factory=lambda: datetime.now(timezone.utc))
+    created_at: datetime = Field(default_factory=lambda: datetime.now(UTC))
 
     @staticmethod
     def compute_payload_hash(payload: dict[str, Any] | None) -> str:
@@ -283,5 +282,4 @@ class DecisionDoc(MongoDoc):
     recommendation: str
     sources: list[str] = []
     status: DecisionStatus = DecisionStatus.PENDING
-    created_at: datetime = Field(default_factory=lambda: datetime.now(timezone.utc))
-
+    created_at: datetime = Field(default_factory=lambda: datetime.now(UTC))

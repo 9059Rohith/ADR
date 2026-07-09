@@ -19,9 +19,13 @@ router = APIRouter()
 class NavigationRequest(BaseModel):
     """Navigation query request."""
 
-    query: str = Field(..., min_length=1, max_length=500, description="Natural language navigation query")
+    query: str = Field(
+        ..., min_length=1, max_length=500, description="Natural language navigation query"
+    )
     from_location_id: str = Field(default="lobby-main", description="Current location node ID")
-    to_location_id: str | None = Field(default=None, description="Optional specific destination node ID")
+    to_location_id: str | None = Field(
+        default=None, description="Optional specific destination node ID"
+    )
     avoid_stairs: bool = Field(default=False)
     wheelchair_accessible: bool = Field(default=False)
     avoid_congestion: bool = Field(default=False)
@@ -75,6 +79,7 @@ async def list_pois(request: Request, poi_type: str | None = None) -> Any:
     """List all points of interest in the venue.
 
     Args:
+        request: FastAPI request with app state.
         poi_type: Optional filter by POI type (e.g., 'restroom', 'gate', 'food_court').
 
     Returns:
@@ -82,10 +87,7 @@ async def list_pois(request: Request, poi_type: str | None = None) -> Any:
     """
     venue_graph = request.app.state.venue_graph
 
-    if poi_type:
-        nodes = venue_graph.get_nodes_by_type(poi_type)
-    else:
-        nodes = venue_graph.get_all_nodes()
+    nodes = venue_graph.get_nodes_by_type(poi_type) if poi_type else venue_graph.get_all_nodes()
 
     return {
         "pois": [

@@ -13,15 +13,17 @@ from __future__ import annotations
 import logging
 import time
 from contextlib import asynccontextmanager
-from collections.abc import AsyncGenerator
-from typing import Any
+from typing import TYPE_CHECKING, Any
 
 import structlog
 from fastapi import FastAPI, Request, Response
 from fastapi.middleware.cors import CORSMiddleware
+from fastapi.responses import JSONResponse
 
+from app.agents.orchestrator import AgentOrchestrator
 from app.config import get_settings
 from app.database import close_db, init_db
+from app.exceptions import SentinelError
 from app.routes import auth, chat, crowd, decisions, incidents, navigation, venues
 from app.seed import (
     create_density_evaluator,
@@ -29,7 +31,9 @@ from app.seed import (
     get_sop_documents,
     seed_mongodb,
 )
-from app.agents.orchestrator import AgentOrchestrator
+
+if TYPE_CHECKING:
+    from collections.abc import AsyncGenerator
 
 
 def _configure_logging() -> None:
@@ -141,7 +145,20 @@ async def lifespan(app: FastAPI) -> AsyncGenerator[None, None]:
 
 
 def create_app() -> FastAPI:
-    """Create and configure the FastAPI application."""
+    """Create and configure the FastAPI application.
+
+    Factory function that assembles the full application with:
+    - CORS configuration
+    - Rate limiting middleware (sliding window per IP)
+    - Security headers middleware (OWASP recommended)
+    - Request logging middleware with timing
+    - Global exception handler for domain errors
+    - Route registration for all API endpoints
+    - Health check and API info endpoints
+
+    Returns:
+        Configured FastAPI application instance.
+    """
     settings = get_settings()
 
     app = FastAPI(
@@ -211,9 +228,7 @@ def create_app() -> FastAPI:
         response.headers["X-Frame-Options"] = "DENY"
         response.headers["X-XSS-Protection"] = "1; mode=block"
         response.headers["Referrer-Policy"] = "strict-origin-when-cross-origin"
-        response.headers["Permissions-Policy"] = (
-            "camera=(), microphone=(self), geolocation=(self)"
-        )
+        response.headers["Permissions-Policy"] = "camera=(), microphone=(self), geolocation=(self)"
         response.headers["Content-Security-Policy"] = (
             "default-src 'self'; "
             "script-src 'self' 'unsafe-inline'; "
@@ -253,6 +268,21 @@ def create_app() -> FastAPI:
     app.include_router(decisions.router, prefix="/api/v1/decisions", tags=["Decision Support"])
     app.include_router(incidents.router, prefix="/api/v1/incidents", tags=["Incidents"])
     app.include_router(venues.router, prefix="/api/v1/venues", tags=["Venues"])
+
+    # ── Global Exception Handler for Domain Errors ──
+    @app.exception_handler(SentinelError)
+    async def sentinel_error_handler(request: Request, exc: SentinelError) -> JSONResponse:
+        """Convert domain exceptions into structured JSON error responses."""
+        logger.warning(
+            "Domain error",
+            error_code=exc.error_code,
+            message=exc.message,
+            path=request.url.path,
+        )
+        return JSONResponse(
+            status_code=exc.status_code,
+            content=exc.to_dict(),
+        )
 
     # ── Health Check ──
     @app.get("/health", tags=["Health"])

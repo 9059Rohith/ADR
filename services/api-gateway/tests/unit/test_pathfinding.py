@@ -135,7 +135,6 @@ class TestPathfinding:
         # Get baseline route
         baseline = simple_graph.find_route("A", "E")
         assert baseline is not None
-        baseline_time = baseline.estimated_time_seconds
 
         # Add heavy congestion to the stairs path
         simple_graph.update_congestion("C", "E", 5.0)

@@ -10,9 +10,11 @@ See ADR-004 for the adapter pattern rationale.
 from __future__ import annotations
 
 from abc import ABC, abstractmethod
-from collections.abc import AsyncIterator
 from dataclasses import dataclass, field
-from typing import Any
+from typing import TYPE_CHECKING, Any
+
+if TYPE_CHECKING:
+    from collections.abc import AsyncIterator
 
 
 @dataclass
@@ -59,6 +61,7 @@ class LLMProvider(ABC):
             max_tokens: Maximum tokens to generate.
             temperature: Sampling temperature.
             system_prompt: Optional system prompt.
+            **kwargs: Provider-specific options.
 
         Returns:
             Complete LLM response.
@@ -81,6 +84,7 @@ class LLMProvider(ABC):
             max_tokens: Maximum tokens to generate.
             temperature: Sampling temperature.
             system_prompt: Optional system prompt.
+            **kwargs: Provider-specific options.
 
         Yields:
             Response content chunks.

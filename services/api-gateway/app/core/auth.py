@@ -9,10 +9,8 @@ JWT-based authentication with:
 
 from __future__ import annotations
 
-import hashlib
 import secrets
-from datetime import datetime, timedelta, timezone
-from typing import Any
+from datetime import UTC, datetime, timedelta
 
 from argon2 import PasswordHasher, Type
 from argon2.exceptions import VerificationError
@@ -102,7 +100,7 @@ def create_access_token(user_id: str, role: UserRole) -> str:
         Encoded JWT string.
     """
     settings = get_settings()
-    now = datetime.now(timezone.utc)
+    now = datetime.now(UTC)
     expires = now + timedelta(minutes=settings.jwt_access_token_expire_minutes)
 
     payload = {
@@ -128,7 +126,7 @@ def create_refresh_token(user_id: str, role: UserRole) -> str:
         Encoded JWT string.
     """
     settings = get_settings()
-    now = datetime.now(timezone.utc)
+    now = datetime.now(UTC)
     expires = now + timedelta(days=settings.jwt_refresh_token_expire_days)
 
     payload = {

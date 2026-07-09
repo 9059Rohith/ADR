@@ -10,12 +10,13 @@ See ADR-004 for the adapter pattern rationale.
 from __future__ import annotations
 
 import asyncio
-import json
 import re
-from collections.abc import AsyncIterator
-from typing import Any
+from typing import TYPE_CHECKING, Any
 
 from app.ports.llm_provider import LLMMessage, LLMProvider, LLMResponse
+
+if TYPE_CHECKING:
+    from collections.abc import AsyncIterator
 
 
 class MockLLMAdapter(LLMProvider):
@@ -83,21 +84,47 @@ class MockLLMAdapter(LLMProvider):
 
         # Navigation-related keywords
         nav_keywords = [
-            "where", "how to get", "navigate", "directions", "route",
-            "nearest", "closest", "find", "way to", "restroom", "gate",
-            "exit", "entrance", "food", "toilet", "bathroom",
+            "where",
+            "how to get",
+            "navigate",
+            "directions",
+            "route",
+            "nearest",
+            "closest",
+            "find",
+            "way to",
+            "restroom",
+            "gate",
+            "exit",
+            "entrance",
+            "food",
+            "toilet",
+            "bathroom",
         ]
 
         # Crowd-related keywords
         crowd_keywords = [
-            "crowd", "busy", "packed", "density", "wait",
-            "queue", "line", "congestion", "capacity",
+            "crowd",
+            "busy",
+            "packed",
+            "density",
+            "wait",
+            "queue",
+            "line",
+            "congestion",
+            "capacity",
         ]
 
         # Decision-related keywords
         decision_keywords = [
-            "recommend", "suggest", "advise", "what should",
-            "incident", "emergency", "alert", "safety",
+            "recommend",
+            "suggest",
+            "advise",
+            "what should",
+            "incident",
+            "emergency",
+            "alert",
+            "safety",
         ]
 
         if any(kw in text_lower for kw in nav_keywords) and "navigation" in categories:

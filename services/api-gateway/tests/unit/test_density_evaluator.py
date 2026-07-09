@@ -6,7 +6,7 @@ severity classification, and time-to-threshold projection.
 
 from __future__ import annotations
 
-from datetime import datetime, timedelta, timezone
+from datetime import UTC, datetime, timedelta
 
 import pytest
 
@@ -45,7 +45,7 @@ class TestDensityEvaluator:
             zone_id="zone-test",
             count=300,
             capacity=500,
-            timestamp=datetime.now(timezone.utc),
+            timestamp=datetime.now(UTC),
         )
         analysis = evaluator.add_reading(reading)
 
@@ -58,7 +58,7 @@ class TestDensityEvaluator:
 
     def test_rising_trend(self, evaluator: DensityEvaluator) -> None:
         """Test that rising density is detected."""
-        base_time = datetime.now(timezone.utc)
+        base_time = datetime.now(UTC)
 
         for i in range(15):
             reading = DensityReading(
@@ -74,7 +74,7 @@ class TestDensityEvaluator:
 
     def test_falling_trend(self, evaluator: DensityEvaluator) -> None:
         """Test that falling density is detected."""
-        base_time = datetime.now(timezone.utc)
+        base_time = datetime.now(UTC)
 
         for i in range(15):
             reading = DensityReading(
@@ -90,7 +90,7 @@ class TestDensityEvaluator:
 
     def test_stable_trend(self, evaluator: DensityEvaluator) -> None:
         """Test that stable density is detected."""
-        base_time = datetime.now(timezone.utc)
+        base_time = datetime.now(UTC)
 
         for i in range(15):
             reading = DensityReading(
@@ -105,7 +105,7 @@ class TestDensityEvaluator:
 
     def test_ewma_smoothing(self, evaluator: DensityEvaluator) -> None:
         """Test that EWMA smooths out spikes."""
-        base_time = datetime.now(timezone.utc)
+        base_time = datetime.now(UTC)
 
         # Add steady readings
         for i in range(10):
@@ -132,7 +132,7 @@ class TestDensityEvaluator:
 
     def test_time_to_threshold_projection(self, evaluator: DensityEvaluator) -> None:
         """Test time-to-threshold projection for rising trends."""
-        base_time = datetime.now(timezone.utc)
+        base_time = datetime.now(UTC)
 
         # Create rising trend approaching warning threshold
         for i in range(15):
@@ -156,7 +156,7 @@ class TestDensityEvaluator:
             zone_id="zone-test",
             count=400,
             capacity=500,
-            timestamp=datetime.now(timezone.utc),
+            timestamp=datetime.now(UTC),
         )
         analysis = evaluator.add_reading(reading)
         data = analysis.to_dict()
@@ -176,7 +176,7 @@ class TestDensityEvaluator:
         ev.register_zone("zone-a", "Zone A")
         ev.register_zone("zone-b", "Zone B")
 
-        now = datetime.now(timezone.utc)
+        now = datetime.now(UTC)
         ev.add_reading(DensityReading("zone-a", 200, 500, now))
         ev.add_reading(DensityReading("zone-b", 400, 500, now))
 
@@ -194,7 +194,7 @@ class TestDensityEvaluator:
             zone_id="zone-test",
             count=600,  # Over capacity
             capacity=500,
-            timestamp=datetime.now(timezone.utc),
+            timestamp=datetime.now(UTC),
         )
         assert reading.density_pct == 100.0
 
@@ -205,7 +205,7 @@ class TestDensityEvaluator:
             zone_id="zone-test",
             count=400,
             capacity=500,
-            timestamp=datetime.now(timezone.utc),
+            timestamp=datetime.now(UTC),
         )
         analysis = evaluator.add_reading(reading)
         assert analysis.severity == SeverityLevel.WARNING
@@ -213,7 +213,7 @@ class TestDensityEvaluator:
 
     def test_sliding_window_trim(self, evaluator: DensityEvaluator) -> None:
         """Test that the sliding window trims old readings."""
-        base_time = datetime.now(timezone.utc)
+        base_time = datetime.now(UTC)
 
         # Add more readings than MAX_READINGS
         for i in range(150):

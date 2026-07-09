@@ -1,7 +1,8 @@
 """SentinelArena — Groq LLM Adapter.
 
 Implements the LLMProvider interface using Groq's ultra-fast LPU inference engine
-with Llama 3.3 70B Versatile (for complex reasoning) and Llama 3.1 8B Instant (for fast routing/classification).
+with Llama 3.3 70B Versatile for reasoning and Llama 3.1 8B Instant
+for fast routing/classification.
 
 Provides:
 - Synchronous and asynchronous completion generation
@@ -12,14 +13,17 @@ Provides:
 from __future__ import annotations
 
 import logging
-from collections.abc import AsyncGenerator
-from typing import Any
+from typing import TYPE_CHECKING, Any
 
 from groq import AsyncGroq
-from groq.types.chat import ChatCompletion
 
 from app.config import get_settings
-from app.ports.llm_provider import LLMMessage, LLMProvider, LLMResponse
+from app.ports.llm_provider import LLMMessage, LLMResponse
+
+if TYPE_CHECKING:
+    from collections.abc import AsyncGenerator
+
+    from groq.types.chat import ChatCompletion
 
 logger = logging.getLogger(__name__)
 
@@ -190,8 +194,10 @@ class GroqLLMAdapter:
         categories_str = ", ".join(f'"{c}"' for c in categories)
 
         base_sys = (
-            f"You are a precise classification engine. Classify the user's input into exactly one of these categories: {categories_str}. "
-            "Return ONLY the category name as your entire response. Do not include quotes, punctuation, or explanation."
+            "You are a precise classification engine. Classify the user's input "
+            f"into exactly one of these categories: {categories_str}. "
+            "Return ONLY the category name as your entire response. Do not "
+            "include quotes, punctuation, or explanation."
         )
         sys_content = f"{system_prompt}\n\n{base_sys}" if system_prompt else base_sys
 
@@ -224,5 +230,3 @@ class GroqLLMAdapter:
         except Exception as exc:
             logger.error("Groq API error during classify: %s", exc)
             return categories[0] if categories else "general"
-
-

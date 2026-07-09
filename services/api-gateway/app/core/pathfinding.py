@@ -11,11 +11,11 @@ from __future__ import annotations
 import heapq
 import math
 from dataclasses import dataclass, field
-from enum import Enum
+from enum import StrEnum
 from typing import Any
 
 
-class AccessibilityType(str, Enum):
+class AccessibilityType(StrEnum):
     """Edge accessibility classification."""
 
     WALKWAY = "walkway"
@@ -144,9 +144,7 @@ class PathConstraints:
             AccessibilityType.ESCALATOR,
         ):
             return False
-        if self.avoid_congestion and edge.congestion_weight > self.max_congestion_weight:
-            return False
-        return True
+        return not (self.avoid_congestion and edge.congestion_weight > self.max_congestion_weight)
 
 
 class VenueGraph:
@@ -254,7 +252,7 @@ class VenueGraph:
         if edge.accessibility == AccessibilityType.ELEVATOR:
             cost += self.ELEVATOR_PENALTY_S
         elif edge.accessibility == AccessibilityType.ESCALATOR:
-            cost *= (1.0 / self.ESCALATOR_SPEED_MULT)
+            cost *= 1.0 / self.ESCALATOR_SPEED_MULT
         elif edge.accessibility == AccessibilityType.STAIRS:
             cost *= 1.3  # Stairs are slower
 
@@ -303,7 +301,7 @@ class VenueGraph:
             if current_id == to_id:
                 return self._reconstruct_route(came_from, from_id, to_id)
 
-            current_node = self._nodes[current_id]
+            self._nodes[current_id]
 
             for edge in self._adjacency.get(current_id, []):
                 neighbor_id = edge.to_node_id

@@ -2,11 +2,11 @@
 
 from __future__ import annotations
 
-import pytest
-from datetime import datetime, timezone
 from unittest.mock import AsyncMock, MagicMock
 
-from app.models import User, Venue, Zone, SOPDocument, UserRole
+import pytest
+
+from app.models import User, UserRole, Venue, Zone
 from app.seed import seed_mongodb
 
 
@@ -58,7 +58,7 @@ class TestMongoDBSeeding:
     async def test_seed_when_empty(self) -> None:
         """Test seeding populates collections when empty."""
         mock_db = MagicMock()
-        
+
         # Setup mocks for empty collections
         for coll_name in ["users", "venues", "zones", "sop_documents", "pois", "edges"]:
             mock_coll = MagicMock()
@@ -79,7 +79,7 @@ class TestMongoDBSeeding:
     async def test_skip_seed_when_populated(self) -> None:
         """Test seeding skips insertion when collections already have documents."""
         mock_db = MagicMock()
-        
+
         # Setup mocks for populated collections
         for coll_name in ["users", "venues", "zones", "sop_documents", "pois", "edges"]:
             mock_coll = MagicMock()
