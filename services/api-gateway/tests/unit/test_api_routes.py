@@ -10,8 +10,8 @@ import pytest
 from pydantic import ValidationError
 
 from app.routes.chat import ChatRequest
-from app.routes.decisions import DecisionAction, DecisionRequest
 from app.routes.incidents import IncidentCreateRequest
+from app.routes.decisions import DecisionRequest, DecisionAction
 from app.routes.navigation import NavigationRequest
 
 

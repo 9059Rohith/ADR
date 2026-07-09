@@ -6,7 +6,7 @@ and crowd advisories.
 
 from __future__ import annotations
 
-from datetime import UTC, datetime
+from datetime import datetime, timezone
 from typing import Any
 
 import structlog
@@ -85,7 +85,7 @@ async def get_crowd_overview(request: Request) -> Any:
     return CrowdOverviewResponse(
         zones=zones,
         overall_severity=overall,
-        timestamp=datetime.now(UTC).isoformat(),
+        timestamp=datetime.now(timezone.utc).isoformat(),
     )
 
 
@@ -109,7 +109,7 @@ async def simulate_reading(
         zone_id=zone_id,
         count=count,
         capacity=capacity,
-        timestamp=datetime.now(UTC),
+        timestamp=datetime.now(timezone.utc),
     )
 
     analysis = evaluator.add_reading(reading)
@@ -130,19 +130,17 @@ async def crowd_websocket(websocket: WebSocket, request: Request = None) -> None
     try:
         while True:
             # Wait for client messages (keepalive pings)
-            await websocket.receive_text()
+            data = await websocket.receive_text()
 
             # Return current density overview
             if hasattr(websocket.app, "state"):
                 evaluator = websocket.app.state.density_evaluator
                 analyses = evaluator.get_all_zone_analyses()
-                await websocket.send_json(
-                    {
-                        "type": "density_update",
-                        "zones": [a.to_dict() for a in analyses],
-                        "timestamp": datetime.now(UTC).isoformat(),
-                    }
-                )
+                await websocket.send_json({
+                    "type": "density_update",
+                    "zones": [a.to_dict() for a in analyses],
+                    "timestamp": datetime.now(timezone.utc).isoformat(),
+                })
 
     except WebSocketDisconnect:
         logger.info("Crowd WebSocket disconnected")

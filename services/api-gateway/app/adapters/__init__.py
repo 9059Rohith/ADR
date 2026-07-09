@@ -5,12 +5,8 @@ Factory functions for creating adapter instances based on configuration.
 
 from __future__ import annotations
 
-from typing import TYPE_CHECKING
-
 from app.config import get_settings
-
-if TYPE_CHECKING:
-    from app.ports.llm_provider import LLMProvider
+from app.ports.llm_provider import LLMProvider
 
 
 def create_llm_provider(*, use_fast_model: bool = False) -> LLMProvider:
@@ -31,12 +27,14 @@ def create_llm_provider(*, use_fast_model: bool = False) -> LLMProvider:
     if settings.use_real_llm:
         from app.adapters.groq_llm import GroqLLMAdapter
 
-        model = settings.groq_fast_model if use_fast_model else settings.groq_reasoning_model
+        model = (
+            settings.groq_fast_model if use_fast_model
+            else settings.groq_reasoning_model
+        )
         return GroqLLMAdapter(
             api_key=settings.groq_api_key,
             default_model=model,
         )
 
     from app.adapters.mock_llm import MockLLMAdapter
-
     return MockLLMAdapter()

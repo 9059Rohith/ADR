@@ -2,9 +2,8 @@
 
 from __future__ import annotations
 
-from unittest.mock import AsyncMock, MagicMock, patch
-
 import pytest
+from unittest.mock import AsyncMock, MagicMock, patch
 
 from app.adapters.groq_llm import GroqLLMAdapter
 from app.ports.llm_provider import LLMMessage, LLMResponse

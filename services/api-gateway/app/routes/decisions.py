@@ -6,7 +6,7 @@ approval, rejection, and audit logging persisted to MongoDB Atlas.
 
 from __future__ import annotations
 
-from datetime import UTC, datetime
+from datetime import datetime, timezone
 from typing import Any
 from uuid import uuid4
 
@@ -69,7 +69,7 @@ async def request_decision(
     )
 
     decision_id = str(uuid4())
-    now = datetime.now(UTC)
+    now = datetime.now(timezone.utc)
 
     decision = {
         "id": decision_id,
@@ -142,7 +142,6 @@ async def action_decision(
     Args:
         decision_id: ID of the decision to act on.
         body: Action details (approve/reject/edit).
-        request: FastAPI request with app state.
     """
     decision = _pending_decisions.get(decision_id)
     db = None
@@ -180,12 +179,7 @@ async def action_decision(
         try:
             await db.decisions.update_one(
                 {"id": decision_id},
-                {
-                    "$set": {
-                        "status": new_status.value,
-                        "recommendation": decision.get("recommendation", ""),
-                    }
-                },
+                {"$set": {"status": new_status.value, "recommendation": decision.get("recommendation", "")}},
             )
 
             payload = {
@@ -221,3 +215,5 @@ async def action_decision(
         "status": new_status.value,
         "audit_logged": audit_logged,
     }
+
+

@@ -11,9 +11,6 @@ these would be loaded from the database.
 
 from __future__ import annotations
 
-from datetime import UTC
-from typing import Any
-
 from app.core.density_evaluator import DensityEvaluator
 from app.core.pathfinding import (
     AccessibilityType,
@@ -66,9 +63,7 @@ def create_venue_graph() -> VenueGraph:
         GraphNode("seating-north", "North Stand Seating", "seating", 1, 400, 100, True, "zone-c"),
         GraphNode("seating-south", "South Stand Seating", "seating", 1, 400, 500, True, "zone-e"),
         GraphNode("restroom-l1", "Restroom L1", "restroom", 1, 350, 200, True, "zone-j"),
-        GraphNode(
-            "food-court-l1", "Food Court (Level 1)", "food_court", 1, 550, 300, True, "zone-j"
-        ),
+        GraphNode("food-court-l1", "Food Court (Level 1)", "food_court", 1, 550, 300, True, "zone-j"),
         GraphNode("elevator-1-l1", "Elevator 1 (Level 1)", "elevator", 1, 500, 200, True, "zone-j"),
         GraphNode("elevator-2-l1", "Elevator 2 (Level 1)", "elevator", 1, 500, 400, True, "zone-j"),
         GraphNode("stairs-1-l1", "Stairs 1 (Level 1)", "stairs", 1, 450, 150, False, "zone-j"),
@@ -372,7 +367,7 @@ async def seed_mongodb(db: Any) -> None:
     Provides instant out-of-the-box readiness for testing and demonstration.
     """
     import logging
-    from datetime import datetime
+    from datetime import datetime, timezone
     from uuid import uuid4
 
     from app.core.auth import hash_password
@@ -382,7 +377,7 @@ async def seed_mongodb(db: Any) -> None:
     try:
         # 1. Seed Demo Users
         if await db.users.count_documents({}) == 0:
-            now = datetime.now(UTC)
+            now = datetime.now(timezone.utc)
             demo_users = [
                 {
                     "id": "user-admin-demo",
@@ -440,7 +435,7 @@ async def seed_mongodb(db: Any) -> None:
                 "description": "Smart Stadium & Tournament Operations Platform Demo Environment",
                 "total_capacity": 10000,
                 "address": "100 Stadium Way, Tech City",
-                "created_at": datetime.now(UTC),
+                "created_at": datetime.now(timezone.utc),
             }
             await db.venues.insert_one(venue_doc)
             logger.info("Seeded demo venue into MongoDB Atlas")
@@ -448,102 +443,18 @@ async def seed_mongodb(db: Any) -> None:
         # 3. Seed Zones
         if await db.zones.count_documents({}) == 0:
             zones_data = [
-                {
-                    "id": "zone-a",
-                    "venue_id": "venue-demo",
-                    "code": "A",
-                    "name": "Zone A — Main Lobby",
-                    "capacity": 1000,
-                    "floor_level": 0,
-                },
-                {
-                    "id": "zone-b",
-                    "venue_id": "venue-demo",
-                    "code": "B",
-                    "name": "Zone B — North Concourse",
-                    "capacity": 800,
-                    "floor_level": 0,
-                },
-                {
-                    "id": "zone-c",
-                    "venue_id": "venue-demo",
-                    "code": "C",
-                    "name": "Zone C — North Stand",
-                    "capacity": 2000,
-                    "floor_level": 1,
-                },
-                {
-                    "id": "zone-d",
-                    "venue_id": "venue-demo",
-                    "code": "D",
-                    "name": "Zone D — South Concourse",
-                    "capacity": 800,
-                    "floor_level": 0,
-                },
-                {
-                    "id": "zone-e",
-                    "venue_id": "venue-demo",
-                    "code": "E",
-                    "name": "Zone E — South Stand",
-                    "capacity": 2000,
-                    "floor_level": 1,
-                },
-                {
-                    "id": "zone-f",
-                    "venue_id": "venue-demo",
-                    "code": "F",
-                    "name": "Zone F — East Wing",
-                    "capacity": 600,
-                    "floor_level": 0,
-                },
-                {
-                    "id": "zone-g",
-                    "venue_id": "venue-demo",
-                    "code": "G",
-                    "name": "Zone G — North Gates",
-                    "capacity": 500,
-                    "floor_level": 0,
-                },
-                {
-                    "id": "zone-h",
-                    "venue_id": "venue-demo",
-                    "code": "H",
-                    "name": "Zone H — South Gates",
-                    "capacity": 500,
-                    "floor_level": 0,
-                },
-                {
-                    "id": "zone-i",
-                    "venue_id": "venue-demo",
-                    "code": "I",
-                    "name": "Zone I — VIP Area",
-                    "capacity": 300,
-                    "floor_level": 0,
-                },
-                {
-                    "id": "zone-j",
-                    "venue_id": "venue-demo",
-                    "code": "J",
-                    "name": "Zone J — Level 1 Concourse",
-                    "capacity": 800,
-                    "floor_level": 1,
-                },
-                {
-                    "id": "zone-k",
-                    "venue_id": "venue-demo",
-                    "code": "K",
-                    "name": "Zone K — Level 2 Concourse",
-                    "capacity": 500,
-                    "floor_level": 2,
-                },
-                {
-                    "id": "zone-l",
-                    "venue_id": "venue-demo",
-                    "code": "L",
-                    "name": "Zone L — Press & VIP Level 2",
-                    "capacity": 200,
-                    "floor_level": 2,
-                },
+                {"id": "zone-a", "venue_id": "venue-demo", "code": "A", "name": "Zone A — Main Lobby", "capacity": 1000, "floor_level": 0},
+                {"id": "zone-b", "venue_id": "venue-demo", "code": "B", "name": "Zone B — North Concourse", "capacity": 800, "floor_level": 0},
+                {"id": "zone-c", "venue_id": "venue-demo", "code": "C", "name": "Zone C — North Stand", "capacity": 2000, "floor_level": 1},
+                {"id": "zone-d", "venue_id": "venue-demo", "code": "D", "name": "Zone D — South Concourse", "capacity": 800, "floor_level": 0},
+                {"id": "zone-e", "venue_id": "venue-demo", "code": "E", "name": "Zone E — South Stand", "capacity": 2000, "floor_level": 1},
+                {"id": "zone-f", "venue_id": "venue-demo", "code": "F", "name": "Zone F — East Wing", "capacity": 600, "floor_level": 0},
+                {"id": "zone-g", "venue_id": "venue-demo", "code": "G", "name": "Zone G — North Gates", "capacity": 500, "floor_level": 0},
+                {"id": "zone-h", "venue_id": "venue-demo", "code": "H", "name": "Zone H — South Gates", "capacity": 500, "floor_level": 0},
+                {"id": "zone-i", "venue_id": "venue-demo", "code": "I", "name": "Zone I — VIP Area", "capacity": 300, "floor_level": 0},
+                {"id": "zone-j", "venue_id": "venue-demo", "code": "J", "name": "Zone J — Level 1 Concourse", "capacity": 800, "floor_level": 1},
+                {"id": "zone-k", "venue_id": "venue-demo", "code": "K", "name": "Zone K — Level 2 Concourse", "capacity": 500, "floor_level": 2},
+                {"id": "zone-l", "venue_id": "venue-demo", "code": "L", "name": "Zone L — Press & VIP Level 2", "capacity": 200, "floor_level": 2},
             ]
             await db.zones.insert_many(zones_data)
             logger.info("Seeded 12 stadium zones into MongoDB Atlas")
@@ -557,7 +468,7 @@ async def seed_mongodb(db: Any) -> None:
                     "title": doc["title"],
                     "section": doc["section"],
                     "content": doc["content"],
-                    "created_at": datetime.now(UTC),
+                    "created_at": datetime.now(timezone.utc),
                 }
                 for doc in get_sop_documents()
             ]
@@ -606,3 +517,5 @@ async def seed_mongodb(db: Any) -> None:
 
     except Exception as exc:
         logger.warning("Error seeding MongoDB Atlas: %s", exc)
+
+

@@ -6,13 +6,10 @@ and SOP documents. Validates configuration model defaults.
 
 from __future__ import annotations
 
-from typing import TYPE_CHECKING
+import pytest
 
+from app.seed import create_venue_graph, create_density_evaluator, get_sop_documents
 from app.config import Settings
-from app.seed import create_density_evaluator, create_venue_graph, get_sop_documents
-
-if TYPE_CHECKING:
-    import pytest
 
 
 class TestVenueGraphSeed:
@@ -34,17 +31,7 @@ class TestVenueGraphSeed:
         """Test that the graph contains all expected POI types."""
         graph = create_venue_graph()
         poi_types = {node.poi_type for node in graph.get_all_nodes()}
-        expected = {
-            "gate",
-            "junction",
-            "restroom",
-            "food_court",
-            "medical",
-            "elevator",
-            "stairs",
-            "ramp",
-            "seating",
-        }
+        expected = {"gate", "junction", "restroom", "food_court", "medical", "elevator", "stairs", "ramp", "seating"}
         assert expected.issubset(poi_types)
 
     def test_graph_has_gates(self) -> None:
@@ -78,7 +65,7 @@ class TestVenueGraphSeed:
 
     def test_accessible_route_exists(self) -> None:
         """Test that accessible routes exist (no stairs)."""
-        from app.core.pathfinding import AccessibilityType, PathConstraints
+        from app.core.pathfinding import PathConstraints, AccessibilityType
 
         graph = create_venue_graph()
         constraints = PathConstraints(wheelchair_accessible=True)

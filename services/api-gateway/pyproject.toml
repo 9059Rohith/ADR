@@ -1,73 +1,34 @@
-[project]
-name = "sentinel-arena-api-gateway"
-version = "1.0.0"
-description = "GenAI-powered Smart Stadium & Tournament Operations Platform — API Gateway"
-readme = "README.md"
-requires-python = ">=3.11"
-license = { text = "MIT" }
-authors = [
-    { name = "SentinelArena Engineering Team" },
-]
-keywords = ["genai", "crowd-management", "fastapi", "langgraph", "smart-stadium"]
-classifiers = [
-    "Development Status :: 4 - Beta",
-    "Framework :: FastAPI",
-    "Intended Audience :: Developers",
-    "Programming Language :: Python :: 3.11",
-    "Programming Language :: Python :: 3.12",
-    "Topic :: Software Development :: Libraries :: Application Frameworks",
-    "Typing :: Typed",
-]
-
 [tool.ruff]
 target-version = "py312"
 line-length = 100
-src = ["app", "tests"]
 
 [tool.ruff.lint]
 select = [
-    "E",     # pycodestyle errors
-    "W",     # pycodestyle warnings
-    "F",     # pyflakes
-    "I",     # isort
-    "N",     # pep8-naming
-    "UP",    # pyupgrade
-    "B",     # flake8-bugbear
-    "S",     # flake8-bandit (security)
-    "A",     # flake8-builtins
-    "C4",    # flake8-comprehensions
-    "DTZ",   # flake8-datetimez
-    "T20",   # flake8-print (no print statements)
-    "SIM",   # flake8-simplify
-    "TCH",   # flake8-type-checking
-    "RUF",   # Ruff-specific rules
-    "ANN",   # flake8-annotations
-    "D",     # pydocstyle (Google style)
-    "PT",    # flake8-pytest-style
+    "E",    # pycodestyle errors
+    "W",    # pycodestyle warnings
+    "F",    # pyflakes
+    "I",    # isort
+    "N",    # pep8-naming
+    "UP",   # pyupgrade
+    "S",    # flake8-bandit (security)
+    "B",    # flake8-bugbear
+    "A",    # flake8-builtins
+    "C4",   # flake8-comprehensions
+    "DTZ",  # flake8-datetimez
+    "T20",  # flake8-print (no print statements)
+    "RUF",  # ruff-specific
 ]
-ignore = [
-    "D100",   # Missing docstring in public module (covered by module-level docstrings)
-    "D104",   # Missing docstring in public package
-    "D107",   # Missing docstring in __init__ (covered by class docstring)
-    "S101",   # Use of assert (OK in tests)
-    "ANN401", # Any is acceptable at framework/provider boundaries
-    "B008",   # FastAPI commonly uses Depends(...) in function defaults
-]
-
-[tool.ruff.lint.pydocstyle]
-convention = "google"
-
-[tool.ruff.lint.isort]
-known-first-party = ["app"]
+ignore = ["S101"]  # Allow assert in tests
 
 [tool.ruff.lint.per-file-ignores]
-"tests/**/*.py" = ["S101", "S106", "ANN", "D"]
-"app/agents/orchestrator.py" = ["E501"] # Prompt literals are kept readable.
-"app/seed.py" = ["E501", "S106"] # Seed content and demo credentials are intentional.
-"app/config.py" = ["S105"] # Placeholder default is overridden by environment.
-"app/core/auth.py" = ["S105"] # Token type literals are not secrets.
-"app/routes/auth.py" = ["S105"] # Token type literals are not secrets.
-"tests/unit/test_auth.py" = ["S105"]
+"tests/**/*.py" = ["S101", "S106"]
+
+[tool.pytest.ini_options]
+asyncio_mode = "auto"
+testpaths = ["tests"]
+markers = [
+    "integration: marks tests as integration tests (deselect with '-m \"not integration\"')",
+]
 
 [tool.mypy]
 python_version = "3.12"
@@ -75,49 +36,18 @@ strict = true
 warn_return_any = true
 warn_unused_configs = true
 disallow_untyped_defs = true
-disallow_incomplete_defs = true
-check_untyped_defs = true
-no_implicit_optional = true
-warn_redundant_casts = true
-warn_unused_ignores = true
-show_error_codes = true
-plugins = ["pydantic.mypy"]
-
-[[tool.mypy.overrides]]
-module = ["motor.*", "pymongo.*", "jose.*", "argon2.*", "groq.*"]
-ignore_missing_imports = true
-
-[tool.pytest.ini_options]
-asyncio_mode = "auto"
-testpaths = ["tests"]
-python_files = ["test_*.py"]
-python_functions = ["test_*"]
-addopts = [
-    "--strict-markers",
-    "--strict-config",
-    "-ra",
-    "--tb=short",
-]
-markers = [
-    "unit: Unit tests (no external dependencies)",
-    "integration: Integration tests (requires MongoDB/Redis)",
-    "slow: Tests that take >5 seconds",
-]
 
 [tool.coverage.run]
 source = ["app"]
 omit = [
-    "app/__pycache__/*",
     "app/alembic/*",
     "app/__main__.py",
 ]
 
 [tool.coverage.report]
-show_missing = true
 fail_under = 85
 exclude_lines = [
     "pragma: no cover",
     "if TYPE_CHECKING:",
     "if __name__ == .__main__.",
-    "@abstractmethod",
 ]

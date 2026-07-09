@@ -12,12 +12,12 @@ explanations and recommendations based on them.
 from __future__ import annotations
 
 from dataclasses import dataclass, field
-from datetime import UTC, datetime
-from enum import StrEnum
+from datetime import datetime, timedelta, timezone
+from enum import Enum
 from typing import Any
 
 
-class SeverityLevel(StrEnum):
+class SeverityLevel(str, Enum):
     """Crowd density severity classification.
 
     Thresholds are deterministic and configurable:
@@ -70,11 +70,10 @@ class TrendAnalysis:
     @property
     def is_actionable(self) -> bool:
         """Whether this trend warrants attention."""
-        return self.severity in (
-            SeverityLevel.WARNING,
-            SeverityLevel.CRITICAL,
-            SeverityLevel.EMERGENCY,
-        ) or (self.trend_direction == "rising" and self.current_density_pct > 60.0)
+        return (
+            self.severity in (SeverityLevel.WARNING, SeverityLevel.CRITICAL, SeverityLevel.EMERGENCY)
+            or (self.trend_direction == "rising" and self.current_density_pct > 60.0)
+        )
 
     def to_dict(self) -> dict[str, Any]:
         """Serialize for API response / LLM consumption.
@@ -96,7 +95,9 @@ class TrendAnalysis:
                 else None
             ),
             "projected_peak_pct": (
-                round(self.projected_peak_pct, 1) if self.projected_peak_pct is not None else None
+                round(self.projected_peak_pct, 1)
+                if self.projected_peak_pct is not None
+                else None
             ),
             "current_count": self.current_count,
             "capacity": self.capacity,
@@ -115,7 +116,7 @@ class CrowdAdvisory:
     advisory_text: str  # Populated by the LLM
     recommended_actions: list[str]  # Populated by the LLM
     sources: list[str]  # Citation list
-    created_at: datetime = field(default_factory=lambda: datetime.now(UTC))
+    created_at: datetime = field(default_factory=lambda: datetime.now(timezone.utc))
 
     def to_dict(self) -> dict[str, Any]:
         """Serialize for API response."""
@@ -204,7 +205,9 @@ class DensityEvaluator:
         severity = self._classify_severity(reading.density_pct)
 
         # Project time to next threshold
-        projected_time = self._project_time_to_threshold(reading.density_pct, trend_rate, severity)
+        projected_time = self._project_time_to_threshold(
+            reading.density_pct, trend_rate, severity
+        )
         projected_peak = self._project_peak(reading.density_pct, trend_rate)
 
         return TrendAnalysis(

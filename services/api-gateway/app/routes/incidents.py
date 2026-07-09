@@ -6,7 +6,7 @@ filed by volunteers and staff, persisted in MongoDB Atlas.
 
 from __future__ import annotations
 
-from datetime import UTC, datetime
+from datetime import datetime, timezone
 from typing import Any
 from uuid import uuid4
 
@@ -74,7 +74,7 @@ async def create_incident(
     )
 
     incident_id = str(uuid4())
-    now = datetime.now(UTC)
+    now = datetime.now(timezone.utc)
 
     incident = {
         "id": incident_id,
@@ -184,3 +184,4 @@ async def get_incident(incident_id: str, request: Request) -> Any:
     if incident_id not in _incidents:
         return {"error": "Incident not found"}
     return _incidents[incident_id]
+

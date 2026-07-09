@@ -7,7 +7,7 @@ agent orchestrator for real-time AI responses.
 from __future__ import annotations
 
 import json
-from typing import TYPE_CHECKING, Any
+from typing import Any
 
 import structlog
 from fastapi import APIRouter, Request
@@ -16,9 +16,6 @@ from pydantic import BaseModel, Field
 
 logger = structlog.get_logger()
 router = APIRouter()
-
-if TYPE_CHECKING:
-    from collections.abc import AsyncIterator
 
 
 class ChatRequest(BaseModel):
@@ -94,7 +91,7 @@ async def chat_stream(
     """
     orchestrator = request.app.state.orchestrator
 
-    async def event_generator() -> AsyncIterator[str]:
+    async def event_generator():
         """Generate SSE events from the agent orchestrator."""
         try:
             result = await orchestrator.process_message(
